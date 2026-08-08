@@ -1,0 +1,8 @@
+{
+  "name": "Nabslodge Hotel Management Portal",
+  "description": "Multi-branch hotel management system featuring Manager and Receptionist dashboards, room management, walk-in ledger, real-time activity tracking, revenue analytics, and dynamic IP branch restrictions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

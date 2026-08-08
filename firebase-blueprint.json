@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user account (Manager or Receptionist)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "branch": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Lodge room inventory details and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "roomType": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string" },
+        "branch": { "type": "string" },
+        "amenities": { "type": "array" },
+        "description": { "type": "string" },
+        "maxGuests": { "type": "number" }
+      },
+      "required": ["id", "roomNumber", "roomType", "price", "status", "branch"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Guest booking reservation or active check-in",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "branch": { "type": "string" },
+        "guestName": { "type": "string" },
+        "guestContact": { "type": "string" },
+        "checkInDate": { "type": "string" },
+        "checkOutDate": { "type": "string" },
+        "status": { "type": "string" },
+        "totalPrice": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "receptionistId": { "type": "string" },
+        "receptionistName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "roomId", "roomNumber", "branch", "guestName", "status", "totalPrice"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System activity audit trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "branch": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "userId", "userName", "userRole", "action"]
+    },
+    "ActivityCatalogItem": {
+      "title": "ActivityCatalogItem",
+      "description": "Walk-in activity catalog service item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "WalkInActivity": {
+      "title": "WalkInActivity",
+      "description": "Walk-in activity revenue transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "guestName": { "type": "string" },
+        "guestPhone": { "type": "string" },
+        "guestEmail": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "totalPrice": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "receptionistId": { "type": "string" },
+        "receptionistName": { "type": "string" },
+        "branch": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "guestName", "serviceType", "totalPrice", "amountPaid"]
+    },
+    "HandoverRecord": {
+      "title": "HandoverRecord",
+      "description": "Record of cash, mobile money, and total handed over by receptionist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "receptionistId": { "type": "string" },
+        "receptionistName": { "type": "string" },
+        "branch": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "cashAmount": { "type": "number" },
+        "momoAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "receptionistId", "receptionistName", "branch", "timestamp", "cashAmount", "momoAmount", "totalAmount"]
+    },
+    "PendingEditRequest": {
+      "title": "PendingEditRequest",
+      "description": "Receptionist request to alter revenue or booking parameters requiring manager authorization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "branch": { "type": "string" },
+        "receptionistId": { "type": "string" },
+        "receptionistName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" },
+        "currentRoomId": { "type": "string" },
+        "currentRoomNumber": { "type": "string" },
+        "currentCheckInDate": { "type": "string" },
+        "currentCheckOutDate": { "type": "string" },
+        "currentTotalPrice": { "type": "number" },
+        "proposedRoomId": { "type": "string" },
+        "proposedRoomNumber": { "type": "string" },
+        "proposedCheckInDate": { "type": "string" },
+        "proposedCheckOutDate": { "type": "string" },
+        "proposedTotalPrice": { "type": "number" },
+        "priceDifference": { "type": "number" },
+        "reason": { "type": "string" },
+        "guestName": { "type": "string" },
+        "guestContact": { "type": "string" },
+        "guestEmail": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "reviewedAt": { "type": "string" },
+        "rejectionReason": { "type": "string" }
+      },
+      "required": ["id", "bookingId", "branch", "receptionistId", "status", "proposedTotalPrice"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "System user profiles and accounts"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Lodge room inventory"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Reservations and check-ins"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System audit logs"
+    },
+    "/ActivityCatalog/{activityId}": {
+      "schema": "ActivityCatalogItem",
+      "description": "Catalog of walk-in activities"
+    },
+    "/ActivityLedger/{transactionId}": {
+      "schema": "WalkInActivity",
+      "description": "Walk-in revenue transactions"
+    },
+    "/settings/{settingId}": {
+      "schema": "GlobalSettings",
+      "description": "Global hotel settings"
+    },
+    "/handovers/{handoverId}": {
+      "schema": "HandoverRecord",
+      "description": "Receptionist shift handover financial records"
+    },
+    "/pendingEditRequests/{requestId}": {
+      "schema": "PendingEditRequest",
+      "description": "Pending requests to edit bookings with financial impact"
+    }
+  }
+}
