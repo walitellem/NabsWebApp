@@ -600,7 +600,18 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <div>
                   <label className="block text-[11px] font-bold font-mono text-zinc-500 dark:text-zinc-400 mb-1">Proposed Status</label>
-                  <select value={proposedPaymentStatus} onChange={(e) => setProposedPaymentStatus(e.target.value as PaymentStatus)} className={`w-full px-3 py-2 rounded-xl text-xs border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-300'}`}>
+                  <select 
+                    value={proposedPaymentStatus} 
+                    onChange={(e) => {
+                      const val = e.target.value as PaymentStatus;
+                      setProposedPaymentStatus(val);
+                      if (val === 'Unpaid') {
+                        setProposedAmountPaid('0');
+                        setProposedPaymentMethod('Pending / Unpaid');
+                      }
+                    }} 
+                    className={`w-full px-3 py-2 rounded-xl text-xs border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-300'}`}
+                  >
                     <option value="Paid">Paid</option>
                     <option value="Unpaid">Unpaid</option>
                     <option value="Partial">Partial</option>
@@ -616,6 +627,7 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
                   <select value={proposedPaymentMethod} onChange={(e) => setProposedPaymentMethod(e.target.value)} className={`w-full px-3 py-2 rounded-xl text-xs border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-300'}`}>
                     <option value="Cash">Cash</option>
                     <option value="Mobile Money">Mobile Money</option>
+                    <option value="Pending / Unpaid">Pending / Unpaid</option>
                   </select>
                 </div>
               </div>
