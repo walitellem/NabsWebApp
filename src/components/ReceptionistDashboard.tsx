@@ -1011,9 +1011,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         for (const sale of bookingUnpaidDrinks) {
           const updatedSale = {
             ...sale,
-            paymentStatus: 'Paid',
+            paymentStatus: 'Paid' as const,
             paidAmount: sale.totalPrice,
             unpaidAmount: 0,
+            settledPaymentMethod: bookingPaymentMethod,
             timestamp: getFormattedDateTime(),
             dateCreated: serverTimestamp(),
             receptionistId: currentUser.id,
@@ -1025,9 +1026,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           if (bookingUnpaidDrinks.some(bs => bs.id === s.id)) {
             return { 
               ...s, 
-              paymentStatus: 'Paid', 
+              paymentStatus: 'Paid' as const, 
               paidAmount: s.totalPrice, 
               unpaidAmount: 0,
+              settledPaymentMethod: bookingPaymentMethod,
               timestamp: getFormattedDateTime(),
               receptionistId: currentUser.id,
               receptionistName: currentUser.name

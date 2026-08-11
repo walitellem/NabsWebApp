@@ -2962,10 +2962,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
         const paid = getDrinkPaidAmount(curr);
         return acc + paid;
-      }, 0);
+      }, 0) + drinkSettlementRevenue;
 
     // Clean summation of actual cash collected without overlap
-    const revenue = baseLodgingRevenue + extensionRevenue + activityRevenue + barRevenue + drinkSettlementRevenue;
+    const revenue = baseLodgingRevenue + extensionRevenue + activityRevenue + barRevenue;
 
     const totalRmsCount = branchRooms.length;
     const occupiedCount = branchRooms.filter(r => r.status === 'Occupied').length;
