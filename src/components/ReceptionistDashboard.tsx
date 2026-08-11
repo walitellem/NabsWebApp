@@ -7265,14 +7265,36 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                           </div>
                         </>
                       )}
-                      <div className="flex justify-between font-bold text-emerald-500 pt-1 border-t border-dashed border-zinc-800/20 dark:border-zinc-800">
-                        <span>Total Paid & Cleared</span>
-                        <span>GH₵{(selectedBooking.totalPrice + checkoutUnpaidDrinksTotal).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-zinc-500 text-[10px]">
-                        <span>Payment Status</span>
-                        <span>SUCCESS / FULLY COMPLETED</span>
-                      </div>
+                      {(() => {
+                        const lateFee = Number((selectedBooking as any).lateCheckOutFeeApplied || 0);
+                        const initialRoomPaid = Math.max(0, selectedBooking.totalPrice - lateFee);
+                        const totalCheckoutDue = lateFee + checkoutUnpaidDrinksTotal;
+                        return (
+                          <>
+                            <div className="flex justify-between font-bold text-emerald-500 pt-1 border-t border-dashed border-zinc-800/20 dark:border-zinc-800">
+                              <span>Room Stay Paid</span>
+                              <span>GH₵{initialRoomPaid.toFixed(2)}</span>
+                            </div>
+                            {totalCheckoutDue > 0 ? (
+                              <div className="flex justify-between font-bold text-amber-500 pt-1">
+                                <span>Balance Due (Late Fee / Drinks)</span>
+                                <span>GH₵{totalCheckoutDue.toFixed(2)}</span>
+                              </div>
+                            ) : (
+                              <div className="flex justify-between font-bold text-emerald-500 pt-1">
+                                <span>Total Paid & Cleared</span>
+                                <span>GH₵{(selectedBooking.totalPrice + checkoutUnpaidDrinksTotal).toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-zinc-500 text-[10px]">
+                              <span>Payment Status</span>
+                              <span className={totalCheckoutDue > 0 ? 'text-amber-500 font-bold' : 'text-emerald-500 font-bold'}>
+                                {totalCheckoutDue > 0 ? 'PENDING CHECKOUT SETTLEMENT' : 'SUCCESS / FULLY COMPLETED'}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <div className="text-center pt-2">
@@ -8336,10 +8358,15 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           const nightlyRate = roomStayTotal / numberOfNights;
 
           let paymentsMade = getActualPaidAmount(invoiceBooking);
-          if (invoiceBooking.status === 'CheckedOut' || invoiceType === 'CheckOut') {
+          const hasLateFee = Number((invoiceBooking as any).lateCheckOutFeeApplied || 0) > 0;
+          if (invoiceBooking.status === 'CheckedOut') {
             paymentsMade = totalGross;
+          } else if (invoiceType === 'CheckOut' && !hasLateFee) {
+            paymentsMade = totalGross;
+          } else if (invoiceType === 'CheckOut' && hasLateFee) {
+            paymentsMade = roomStayTotal;
           } else if (invoiceBooking.paymentStatus === 'Paid') {
-            paymentsMade = Math.max(paymentsMade, roomStayTotal + lateCheckOutFeeApplied);
+            paymentsMade = Math.max(paymentsMade, roomStayTotal);
           }
           const balanceDue = Math.max(0, totalGross - paymentsMade);
           const isReceipt = balanceDue <= 0 || invoiceType === 'CheckOut' || invoiceBooking.status === 'CheckedOut';
