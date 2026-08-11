@@ -1717,7 +1717,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         console.warn("Firestore activity catalog snapshot listener error:", err);
       });
 
-      const roomRevenueQ = query(collection(db, 'RoomRevenue'), where('receptionistId', '==', currentUser.id));
+      const roomRevenueQ = query(collection(db, 'RoomRevenue'), where('branch', '==', branch));
       unsubRoomRevenue = onSnapshot(roomRevenueQ, (snapshot) => {
         const fetched: any[] = [];
         snapshot.forEach(docSnap => {
@@ -1725,11 +1725,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         });
         setRoomRevenues(fetched);
         try {
-          const raw = localStorage.getItem('nabslodge_room_revenues');
-          const globalRevs = raw ? JSON.parse(raw) : [];
-          const otherRevs = globalRevs.filter((r: any) => r.receptionistId !== currentUser.id);
-          const merged = [...fetched, ...otherRevs];
-          localStorage.setItem('nabslodge_room_revenues', JSON.stringify(merged));
+          localStorage.setItem('nabslodge_room_revenues', JSON.stringify(fetched));
         } catch (e) {
           console.error("Failed to update localStorage room revenues:", e);
         }
@@ -1737,7 +1733,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         console.warn("Firestore room revenues snapshot error:", err);
       });
 
-      const walkInQ = query(collection(db, 'ActivityLedger'), where('receptionistId', '==', currentUser.id));
+      const walkInQ = query(collection(db, 'ActivityLedger'), where('branch', '==', branch));
       unsubWalkIn = onSnapshot(walkInQ, (snapshot) => {
         const fetched: any[] = [];
         snapshot.forEach(docSnap => {
@@ -1745,11 +1741,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         });
         setWalkInTransactions(fetched);
         try {
-          const raw = localStorage.getItem('nabslodge_activity_ledger');
-          const globalWalkIns = raw ? JSON.parse(raw) : [];
-          const otherWalkIns = globalWalkIns.filter((w: any) => w.receptionistId !== currentUser.id);
-          const merged = [...fetched, ...otherWalkIns];
-          localStorage.setItem('nabslodge_activity_ledger', JSON.stringify(merged));
+          localStorage.setItem('nabslodge_activity_ledger', JSON.stringify(fetched));
         } catch (e) {
           console.error("Failed to update localStorage activity ledger:", e);
         }

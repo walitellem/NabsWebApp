@@ -1877,28 +1877,14 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         });
       }
 
-      // Merge with local storage for offline support and seamless testing across tabs/roles
-      try {
-        const local = localStorage.getItem('nabslodge_pending_edits');
-        if (local) {
-          const localParsed = JSON.parse(local) as PendingEditRequest[];
-          if (Array.isArray(localParsed)) {
-            // Deduplicate by ID: prioritize the Firestore-synced copy if it exists
-            const fsIds = new Set(editsData.map(e => e.id));
-            for (const localReq of localParsed) {
-              if (localReq && localReq.id && !fsIds.has(localReq.id)) {
-                editsData.push(localReq);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Error parsing local pending edits:", e);
-      }
-
       const sorted = editsData.sort((a, b) => getSafeTime(b.createdAt) - getSafeTime(a.createdAt));
       setPendingEditRequests(sorted);
-      localStorage.setItem('nabslodge_pending_edits', JSON.stringify(sorted));
+      
+      try {
+        localStorage.setItem('nabslodge_pending_edits', JSON.stringify(sorted));
+      } catch (e) {
+        console.warn("Error saving pending edits to local storage:", e);
+      }
     }, (error) => {
       console.warn("Firestore PendingEditRequests Subscription Error:", error);
       // Robust fallback entirely to local storage if Firestore subscription fails or is blocked
