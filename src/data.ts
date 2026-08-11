@@ -1034,13 +1034,11 @@ export const checkoutBooking = (
 
   bookings[bookingIndex].totalPrice = roomStayTotal;
   if (hasLateFee) {
-    bookings[bookingIndex].paymentStatus = 'Partial';
-    const computedPrior = priorPaid > 0 ? priorPaid : Math.max(0, roomStayTotal - Number(lateCheckOutFeeApplied));
-    bookings[bookingIndex].amountPaid = computedPrior;
-    bookings[bookingIndex].deposit = computedPrior;
-    (bookings[bookingIndex] as any).priorAmountPaid = computedPrior;
-    bookings[bookingIndex].balance_due = Number(lateCheckOutFeeApplied);
-    bookings[bookingIndex].pending_payment = Number(lateCheckOutFeeApplied);
+    bookings[bookingIndex].paymentStatus = 'Paid';
+    bookings[bookingIndex].amountPaid = roomStayTotal + unpaidDrinksTotal;
+    bookings[bookingIndex].deposit = roomStayTotal + unpaidDrinksTotal;
+    bookings[bookingIndex].balance_due = 0;
+    bookings[bookingIndex].pending_payment = 0;
   } else {
     bookings[bookingIndex].paymentStatus = 'Paid';
     bookings[bookingIndex].amountPaid = roomStayTotal + unpaidDrinksTotal;
