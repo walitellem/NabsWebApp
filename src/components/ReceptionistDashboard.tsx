@@ -34,12 +34,28 @@ import { EmptyState } from './EmptyState';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+export function isBookingPaid(b: any): boolean {
+  if (!b) return false;
+  if (b.paymentStatus === 'Paid') return true;
+  const paid = Number(b.amountPaid || b.deposit || b.amountReceived || 0);
+  const total = Number(b.totalPrice || 0);
+  if (total > 0 && paid >= total) return true;
+  return false;
+}
+
+export function getEffectivePaymentStatus(b: any): string {
+  if (isBookingPaid(b)) return 'Paid';
+  return b.paymentStatus || 'Unpaid';
+}
+
 export function getActualPaidAmount(b: any): number {
   if (!b) return 0;
   const directPaid = Number(b.amountPaid || b.deposit || b.amountReceived || 0);
+  const total = Number(b.totalPrice || 0);
+  if (directPaid >= total && total > 0) return total;
   if (directPaid > 0) return directPaid;
-  if (b.paymentStatus === 'Paid') return Number(b.totalPrice || 0);
-  if (b.paymentStatus === 'Partial' || b.paymentStatus?.startsWith('Partially')) return Number(b.totalPrice || 0) * 0.5;
+  if (isBookingPaid(b)) return total;
+  if (b.paymentStatus === 'Partial' || b.paymentStatus?.startsWith('Partially')) return total * 0.5;
   return 0;
 }
 
@@ -4601,13 +4617,13 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               </td>
                               <td className="py-3.5 px-2">
                                 <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                  b.paymentStatus === 'Paid'
+                                  isBookingPaid(b)
                                     ? 'bg-emerald-500/10 text-emerald-500'
                                     : b.paymentStatus === 'Partially Paid (50% Deposit)' || b.paymentStatus === 'Partial'
                                       ? 'bg-amber-500/10 text-amber-500'
                                       : 'bg-red-500/10 text-red-500'
                                 }`}>
-                                  {b.paymentStatus}
+                                  {getEffectivePaymentStatus(b)}
                                 </span>
                                 <span className="block text-[10px] text-zinc-500 mt-1 font-mono">
                                   Paid: GH₵{(b.amountPaid || b.deposit || b.amountReceived || (b.paymentStatus === 'Paid' ? b.totalPrice : (b.paymentStatus === 'Partial' || b.paymentStatus?.startsWith('Partially')) ? b.totalPrice * 0.5 : 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })} / GH₵{b.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
