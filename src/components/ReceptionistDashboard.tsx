@@ -36,6 +36,8 @@ import html2canvas from 'html2canvas';
 
 export function isBookingPaid(b: any): boolean {
   if (!b) return false;
+  if (b.paymentStatus === 'Partial' || b.paymentStatus?.startsWith('Partially') || b.paymentStatus === 'Pending') return false;
+  if (Number(b.lateCheckOutFeeApplied || 0) > 0 && Number(b.balance_due || b.pending_payment || 0) > 0) return false;
   if (b.paymentStatus === 'Paid') return true;
   const paid = Number(b.amountPaid || b.deposit || b.amountReceived || 0);
   const total = Number(b.totalPrice || 0);
@@ -50,6 +52,13 @@ export function getEffectivePaymentStatus(b: any): string {
 
 export function getActualPaidAmount(b: any): number {
   if (!b) return 0;
+  const prior = Number(b.priorAmountPaid || b.prior_amount_paid || 0);
+  const lateFee = Number(b.lateCheckOutFeeApplied || 0);
+  if (lateFee > 0 && prior > 0) return prior;
+  if (lateFee > 0 && Number(b.totalPrice || 0) > lateFee) {
+    const computed = Number(b.totalPrice || 0) - lateFee;
+    return computed > 0 ? computed : 0;
+  }
   const directPaid = Number(b.amountPaid || b.deposit || b.amountReceived || 0);
   const total = Number(b.totalPrice || 0);
   if (directPaid >= total && total > 0) return total;
