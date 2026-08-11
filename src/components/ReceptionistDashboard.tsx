@@ -8376,14 +8376,17 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           const hasLateFee = Number((invoiceBooking as any).lateCheckOutFeeApplied || 0) > 0;
           if (hasLateFee) {
             const priorVal = Number((invoiceBooking as any).priorAmountPaid || 0);
-            paymentsMade = priorVal > 0 ? priorVal : Math.max(0, totalGross - lateCheckOutFeeApplied);
-          } else if (invoiceBooking.status === 'CheckedOut' || invoiceType === 'CheckOut') {
+            const directPaid = Number(invoiceBooking.amountPaid || invoiceBooking.deposit || 0);
+            if (directPaid >= totalGross || invoiceBooking.paymentStatus === 'Paid') {
+              paymentsMade = totalGross;
+            } else {
+              paymentsMade = priorVal > 0 ? priorVal : Math.max(0, totalGross - lateCheckOutFeeApplied - unpaidDrinksTotal);
+            }
+          } else if (invoiceBooking.paymentStatus === 'Paid' || invoiceBooking.status === 'CheckedOut' || invoiceType === 'CheckOut') {
             paymentsMade = totalGross;
-          } else if (invoiceBooking.paymentStatus === 'Paid') {
-            paymentsMade = Math.max(paymentsMade, roomStayTotal);
           }
           const balanceDue = Math.max(0, totalGross - paymentsMade);
-          const isReceipt = balanceDue <= 0 && !hasLateFee;
+          const isReceipt = balanceDue <= 0;
           const documentLabel = isReceipt ? 'Receipt' : 'Invoice';
           const invoiceNum = `${isReceipt ? 'REC' : 'INV'}-${invoiceBooking.id.replace('book_', '').toUpperCase()}`;
           const dateOfIssue = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
