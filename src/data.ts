@@ -1027,14 +1027,27 @@ export const checkoutBooking = (
 
   // Update booking record
   bookings[bookingIndex].status = 'CheckedOut';
-  bookings[bookingIndex].paymentStatus = 'Paid'; // Forced to paid in full upon checkout for simplified flow
   bookings[bookingIndex].actualCheckOutDate = getFormattedDateTime();
   const roomStayTotal = finalTotalPrice !== undefined ? finalTotalPrice : bookings[bookingIndex].totalPrice;
+  const hasLateFee = Number(lateCheckOutFeeApplied || 0) > 0;
+  const priorPaid = Number(bookings[bookingIndex].amountPaid || bookings[bookingIndex].deposit || 0);
+
   bookings[bookingIndex].totalPrice = roomStayTotal;
-  bookings[bookingIndex].amountPaid = roomStayTotal + unpaidDrinksTotal;
-  bookings[bookingIndex].deposit = roomStayTotal + unpaidDrinksTotal;
-  bookings[bookingIndex].balance_due = 0;
-  bookings[bookingIndex].pending_payment = 0;
+  if (hasLateFee) {
+    bookings[bookingIndex].paymentStatus = 'Partial';
+    const computedPrior = priorPaid > 0 ? priorPaid : Math.max(0, roomStayTotal - Number(lateCheckOutFeeApplied));
+    bookings[bookingIndex].amountPaid = computedPrior;
+    bookings[bookingIndex].deposit = computedPrior;
+    (bookings[bookingIndex] as any).priorAmountPaid = computedPrior;
+    bookings[bookingIndex].balance_due = Number(lateCheckOutFeeApplied);
+    bookings[bookingIndex].pending_payment = Number(lateCheckOutFeeApplied);
+  } else {
+    bookings[bookingIndex].paymentStatus = 'Paid';
+    bookings[bookingIndex].amountPaid = roomStayTotal + unpaidDrinksTotal;
+    bookings[bookingIndex].deposit = roomStayTotal + unpaidDrinksTotal;
+    bookings[bookingIndex].balance_due = 0;
+    bookings[bookingIndex].pending_payment = 0;
+  }
   if (lateCheckOutFeeApplied !== undefined) {
     (bookings[bookingIndex] as any).lateCheckOutFeeApplied = lateCheckOutFeeApplied;
   }

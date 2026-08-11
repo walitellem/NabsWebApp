@@ -3563,16 +3563,18 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         const userAssignedBranch = currentUser.assignedBranch || currentUser.branch || branch;
 
         const priorPaidAmount = getActualPaidAmount(selectedBooking);
+        const computedPrior = priorPaidAmount > 0 ? priorPaidAmount : Math.max(0, finalTotalPrice - lateCheckOutFeeApplied);
         await setDoc(doc(db, 'bookings', selectedBooking.id), {
           status: 'CheckedOut',
           paymentStatus: lateCheckOutFeeApplied > 0 ? 'Partial' : 'Paid',
           totalPrice: finalTotalPrice,
-          amountPaid: lateCheckOutFeeApplied > 0 ? priorPaidAmount : totalAmountCollected,
-          deposit: lateCheckOutFeeApplied > 0 ? priorPaidAmount : totalAmountCollected,
+          amountPaid: lateCheckOutFeeApplied > 0 ? computedPrior : totalAmountCollected,
+          priorAmountPaid: lateCheckOutFeeApplied > 0 ? computedPrior : 0,
+          deposit: lateCheckOutFeeApplied > 0 ? computedPrior : totalAmountCollected,
           discountType: finalDiscountType,
           discountAmount: finalDiscountAmount,
-          balance_due: lateCheckOutFeeApplied,
-          pending_payment: lateCheckOutFeeApplied,
+          balance_due: lateCheckOutFeeApplied > 0 ? lateCheckOutFeeApplied : 0,
+          pending_payment: lateCheckOutFeeApplied > 0 ? lateCheckOutFeeApplied : 0,
           lateCheckOutFeeApplied,
           actualCheckOutDate: checkoutDateStr,
           branch: branch,
@@ -3679,14 +3681,15 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
       // Launch final settlement invoice view showing the breakdown of the stay
       const priorPaidAmount = getActualPaidAmount(selectedBooking);
+      const computedPrior = priorPaidAmount > 0 ? priorPaidAmount : Math.max(0, finalTotalPrice - lateCheckOutFeeApplied);
       setInvoiceBooking({
         ...selectedBooking,
         status: 'CheckedOut',
         paymentStatus: lateCheckOutFeeApplied > 0 ? 'Partial' : 'Paid',
         totalPrice: finalTotalPrice,
-        amountPaid: lateCheckOutFeeApplied > 0 ? priorPaidAmount : finalTotalPrice,
-        priorAmountPaid: priorPaidAmount,
-        deposit: lateCheckOutFeeApplied > 0 ? priorPaidAmount : finalTotalPrice,
+        amountPaid: lateCheckOutFeeApplied > 0 ? computedPrior : finalTotalPrice,
+        priorAmountPaid: computedPrior,
+        deposit: lateCheckOutFeeApplied > 0 ? computedPrior : finalTotalPrice,
         discountType: finalDiscountType,
         discountAmount: finalDiscountAmount,
         lateCheckOutFeeApplied,
