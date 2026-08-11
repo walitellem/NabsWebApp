@@ -3001,9 +3001,13 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
   const parseTimestampMs = (record: any): number | null => {
     if (!record) return null;
-    const val = record.dateCreated ?? record.timestamp ?? record.createdAt ?? record.date;
-    const d = parseSafeDate(val);
-    return d ? d.getTime() : null;
+    for (const field of ['dateCreated', 'timestamp', 'createdAt', 'date']) {
+      if (record[field]) {
+        const d = parseSafeDate(record[field]);
+        if (d && !isNaN(d.getTime())) return d.getTime();
+      }
+    }
+    return null;
   };
 
   const getReceptionistShiftStats = (recId: string, lastShiftReset?: number, recEmail?: string, recName?: string) => {

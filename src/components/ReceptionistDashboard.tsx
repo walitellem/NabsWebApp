@@ -1013,13 +1013,25 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
             ...sale,
             paymentStatus: 'Paid',
             paidAmount: sale.totalPrice,
-            unpaidAmount: 0
+            unpaidAmount: 0,
+            timestamp: getFormattedDateTime(),
+            dateCreated: serverTimestamp(),
+            receptionistId: currentUser.id,
+            receptionistName: currentUser.name
           };
           await setDoc(doc(db, 'drinkSales', sale.id), updatedSale, { merge: true });
         }
         const updatedDrinkSalesList = drinkSales.map(s => {
           if (bookingUnpaidDrinks.some(bs => bs.id === s.id)) {
-            return { ...s, paymentStatus: 'Paid', paidAmount: s.totalPrice, unpaidAmount: 0 };
+            return { 
+              ...s, 
+              paymentStatus: 'Paid', 
+              paidAmount: s.totalPrice, 
+              unpaidAmount: 0,
+              timestamp: getFormattedDateTime(),
+              receptionistId: currentUser.id,
+              receptionistName: currentUser.name
+            };
           }
           return s;
         });
@@ -2001,9 +2013,13 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
   const parseTimestampMs = (record: any): number | null => {
     if (!record) return null;
-    const val = record.dateCreated ?? record.timestamp ?? record.createdAt ?? record.date;
-    const d = parseSafeDate(val);
-    return d ? d.getTime() : null;
+    for (const field of ['dateCreated', 'timestamp', 'createdAt', 'date']) {
+      if (record[field]) {
+        const d = parseSafeDate(record[field]);
+        if (d && !isNaN(d.getTime())) return d.getTime();
+      }
+    }
+    return null;
   };
 
   const isRecordInActiveShift = useCallback((record: any): boolean => {
@@ -3636,13 +3652,26 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               paymentStatus: 'Paid' as const,
               paidAmount: sale.totalPrice,
               unpaidAmount: 0,
-              settledPaymentMethod: checkoutPaymentMethod
+              settledPaymentMethod: checkoutPaymentMethod,
+              timestamp: checkoutDateStr,
+              dateCreated: serverTimestamp(),
+              receptionistId: currentUser.id,
+              receptionistName: currentUser.name
             };
             await setDoc(doc(db, 'drinkSales', sale.id), updatedSale, { merge: true });
           }
           const updatedDrinkSalesList = drinkSales.map(s => {
             if (bookingUnpaidDrinks.some(bs => bs.id === s.id)) {
-              return { ...s, paymentStatus: 'Paid' as const, paidAmount: s.totalPrice, unpaidAmount: 0, settledPaymentMethod: checkoutPaymentMethod };
+              return { 
+                ...s, 
+                paymentStatus: 'Paid' as const, 
+                paidAmount: s.totalPrice, 
+                unpaidAmount: 0, 
+                settledPaymentMethod: checkoutPaymentMethod,
+                timestamp: checkoutDateStr,
+                receptionistId: currentUser.id,
+                receptionistName: currentUser.name
+              };
             }
             return s;
           });
