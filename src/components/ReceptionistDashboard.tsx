@@ -741,8 +741,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     }
     const currentBookings = getBookings();
     const found = currentBookings.find(b => 
-      b.roomId === selectedRoom.id && 
-      b.branch === branch && 
+      (b.roomId === selectedRoom.id || (b.roomNumber && String(b.roomNumber) === String(selectedRoom.roomNumber))) && 
+      (b.branch === branch || !b.branch) && 
       !['CheckedOut', 'Cancelled', 'No Show'].includes(b.status)
     );
     setActiveBooking(found || null);
@@ -3202,8 +3202,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     setIsProcessingAction(true);
 
     try {
-      if (!arrivalBooking.id || !arrivalBooking.roomId) {
-        throw new Error("Missing critical booking data (ID or Room ID).");
+      if (!arrivalBooking.id || (!arrivalBooking.roomId && !arrivalBooking.roomNumber)) {
+        throw new Error("Missing critical booking data (ID, Room ID, or Room Number).");
       }
 
       const nowStr = getFormattedDateTime();
@@ -3223,9 +3223,14 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
       const userAssignedBranch = currentUser.assignedBranch || currentUser.branch || branch;
 
+      // Locate the exact matching room document by ID or Room Number
+      const targetRoom = rooms.find(r => r.id === arrivalBooking.roomId || String(r.roomNumber) === String(arrivalBooking.roomNumber));
+      const targetRoomId = targetRoom ? targetRoom.id : arrivalBooking.roomId;
+
       // 1. Update Booking status to 'CheckedIn', amountPaid, deposit, paymentStatus, and balance_due
       const updatedBooking: Booking = {
         ...arrivalBooking,
+        roomId: targetRoomId,
         status: 'CheckedIn',
         paymentStatus: updatedPaymentStatus,
         deposit: updatedAmountPaid,
@@ -3246,7 +3251,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         pending_payment: arrivalPendingBalance,
         branch: branch,
         lodgeBranch: userAssignedBranch,
-        roomId: arrivalBooking.roomId,
+        roomId: targetRoomId,
         roomType: arrivalBooking.roomType || '',
         guestCount: Number(arrivalBooking.guestCount) || 1,
         totalRate: singleNightRate,
@@ -3257,7 +3262,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       if (isPayNow) {
         const balanceAmt = arrivalBooking.totalPrice - depositPaid;
         if (balanceAmt > 0) {
-          const rObj = rooms.find(rm => rm.id === arrivalBooking.roomId);
+          const rObj = rooms.find(rm => rm.id === targetRoomId || String(rm.roomNumber) === String(arrivalBooking.roomNumber));
           await logRoomRevenue({
             bookingId: arrivalBooking.id,
             roomNumber: arrivalBooking.roomNumber,
@@ -3274,13 +3279,15 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       }
 
       // 2. Set Room status to 'Occupied' in Firestore
-      await setDoc(doc(db, 'rooms', arrivalBooking.roomId), {
-        status: 'Occupied'
-      }, { merge: true });
+      if (targetRoomId) {
+        await setDoc(doc(db, 'rooms', targetRoomId), {
+          status: 'Occupied'
+        }, { merge: true });
+      }
 
       // Update local state if snapshots are not immediate enough
       setBookings(prev => prev.map(b => b.id === arrivalBooking.id ? updatedBooking : b));
-      setRooms(prev => prev.map(r => r.id === arrivalBooking.roomId ? { ...r, status: 'Occupied' } : r));
+      setRooms(prev => prev.map(r => (r.id === targetRoomId || String(r.roomNumber) === String(arrivalBooking.roomNumber)) ? { ...r, status: 'Occupied' } : r));
 
       // Save to local storage for offline synchronization
       try {
@@ -3475,7 +3482,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       alert(`Room ${room.roomNumber} belongs to ${room.branch || (branch === 'Annex' ? 'Ayigya' : 'Annex')} branch and is view-only. You cannot process check-outs across branches.`);
       return;
     }
-    const activeBook = bookings.find(b => b.roomId === room.id && b.status === 'CheckedIn');
+    const activeBook = bookings.find(b => (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && b.status === 'CheckedIn');
     if (activeBook) {
       setSelectedBooking(activeBook);
       setCheckoutSuccess(false);
@@ -5055,10 +5062,14 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                             );
                           })
                           .map((room) => {
-                            const isOccupied = room.status === 'Occupied';
-                            const isMaintenance = room.status === 'Maintenance';
-                      const isCleaning = room.status === 'Cleaning';
-                            const activeBooking = isOccupied ? bookings.find(b => b.roomId === room.id && b.status === 'CheckedIn') : null;
+                            const activeBooking = bookings.find(b => 
+                              (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
+                              b.status === 'CheckedIn' && 
+                              (b.branch === room.branch || !b.branch || b.branch === branch)
+                            ) || null;
+                            const isOccupied = room.status === 'Occupied' || !!activeBooking;
+                            const isMaintenance = room.status === 'Maintenance' && !activeBooking;
+                            const isCleaning = room.status === 'Cleaning' && !activeBooking;
                             
                             let radarClasses = "";
                             let radarBadge = null;
@@ -5197,10 +5208,14 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                       );
                     })
                     .map((room) => {
-                      const isOccupied = room.status === 'Occupied';
-                      const isMaintenance = room.status === 'Maintenance';
-                      const isCleaning = room.status === 'Cleaning';
-                      const activeBooking = isOccupied ? bookings.find(b => b.roomId === room.id && b.status === 'CheckedIn') : null;
+                      const activeBooking = bookings.find(b => 
+                        (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
+                        b.status === 'CheckedIn' && 
+                        (b.branch === room.branch || !b.branch || b.branch === branch)
+                      ) || null;
+                      const isOccupied = room.status === 'Occupied' || !!activeBooking;
+                      const isMaintenance = room.status === 'Maintenance' && !activeBooking;
+                      const isCleaning = room.status === 'Cleaning' && !activeBooking;
 
                       let radarBorder = isOccupied ? 'border-blue-500/20' : isMaintenance ? 'border-red-500/20' : isCleaning ? 'border-amber-500/20' : '';
                       if (isOccupied && activeBooking) {
@@ -5991,7 +6006,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const r = rooms.find(room => room.id === b.roomId);
+                                        const r = rooms.find(room => room.id === b.roomId || String(room.roomNumber) === String(b.roomNumber));
                                         if (r) {
                                           handleOpenInvoice(r);
                                         } else {
@@ -6288,7 +6303,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                   </button>
                                   <button
                                     onClick={() => {
-                                      const room = rooms.find(r => r.id === b.roomId);
+                                      const room = rooms.find(r => r.id === b.roomId || String(r.roomNumber) === String(b.roomNumber));
                                       if (room) handleOpenInvoice(room);
                                     }}
                                     className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[10px] cursor-pointer"
