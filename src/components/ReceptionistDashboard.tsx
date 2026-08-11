@@ -3296,8 +3296,9 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         saveBookings(updatedLocalBookings);
         
         const localRooms = getRooms();
-        const updatedLocalRooms = localRooms.map(r => r.id === arrivalBooking.roomId ? { ...r, status: 'Occupied' as RoomStatus } : r);
+        const updatedLocalRooms = localRooms.map(r => (r.id === targetRoomId || String(r.roomNumber) === String(arrivalBooking.roomNumber)) ? { ...r, status: 'Occupied' as RoomStatus } : r);
         saveRooms(updatedLocalRooms);
+        updateRoomStatus(currentUser.id, currentUser.name, currentUser.role, targetRoomId, 'Occupied');
       } catch (err) {
         console.warn("Failed to update local storage for arrival check-in:", err);
       }
@@ -3875,12 +3876,22 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     }
   };
 
+  const getRoomEffectiveStatus = (room: Room): RoomStatus => {
+    const activeBooking = bookings.find(b => 
+      (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
+      b.status === 'CheckedIn' && 
+      (b.branch === room.branch || !b.branch || b.branch === branch)
+    );
+    if (activeBooking) return 'Occupied';
+    return room.status;
+  };
+
   // Count metrics for header stats
   const totalRoomsCount = rooms.length;
-  const occupiedCount = rooms.filter(r => r.status === 'Occupied').length;
-  const availableCount = rooms.filter(r => r.status === 'Available').length;
-  const maintenanceCount = rooms.filter(r => r.status === 'Maintenance').length;
-  const cleaningCount = rooms.filter(r => r.status === 'Cleaning').length;
+  const occupiedCount = rooms.filter(r => getRoomEffectiveStatus(r) === 'Occupied').length;
+  const availableCount = rooms.filter(r => getRoomEffectiveStatus(r) === 'Available').length;
+  const maintenanceCount = rooms.filter(r => getRoomEffectiveStatus(r) === 'Maintenance').length;
+  const cleaningCount = rooms.filter(r => getRoomEffectiveStatus(r) === 'Cleaning').length;
 
   // Get active bookings that are due for checkout within 2 hours (or overdue)
   const getDueSoonBookings = () => {
@@ -5052,7 +5063,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               <td className="p-4 text-right"><div className="h-8 w-24 bg-zinc-250 dark:bg-zinc-800 rounded-lg ml-auto"></div></td>
                             </tr>
                           ))
-                        ) : (showCrossBranch ? otherBranchRooms.filter(r => r.status === 'Available') : rooms.filter(r => roomStatusFilter === 'All' || r.status === roomStatusFilter))
+                        ) : (showCrossBranch ? otherBranchRooms.filter(r => getRoomEffectiveStatus(r) === 'Available') : rooms.filter(r => roomStatusFilter === 'All' || getRoomEffectiveStatus(r) === roomStatusFilter))
                           .filter(r => {
                             const query = searchQuery.toLowerCase().trim();
                             return (
@@ -5067,9 +5078,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               b.status === 'CheckedIn' && 
                               (b.branch === room.branch || !b.branch || b.branch === branch)
                             ) || null;
-                            const isOccupied = room.status === 'Occupied' || !!activeBooking;
-                            const isMaintenance = room.status === 'Maintenance' && !activeBooking;
-                            const isCleaning = room.status === 'Cleaning' && !activeBooking;
+                            const effectiveStatus = getRoomEffectiveStatus(room);
+                            const isOccupied = effectiveStatus === 'Occupied';
+                            const isMaintenance = effectiveStatus === 'Maintenance';
+                            const isCleaning = effectiveStatus === 'Cleaning';
                             
                             let radarClasses = "";
                             let radarBadge = null;
@@ -5113,8 +5125,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                 </td>
                                 <td className="p-4 font-mono">{room.maxGuests || 2} guests</td>
                                 <td className="p-4">
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase border ${getRoomStatusClasses(room.status, isDarkMode)}`}>
-                                    {room.status}
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase border ${getRoomStatusClasses(effectiveStatus, isDarkMode)}`}>
+                                    {effectiveStatus}
                                   </span>
                                 </td>
                                 <td className="p-4">
@@ -5137,7 +5149,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                       </span>
                                     ) : (
                                       <>
-                                        {room.status === 'Available' && (
+                                        {effectiveStatus === 'Available' && (
                                           <button
                                             onClick={() => handleOpenBooking(room)}
                                             className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-[10px] cursor-pointer"
@@ -5145,7 +5157,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                             Book
                                           </button>
                                         )}
-                                        {room.status === 'Occupied' && (
+                                        {effectiveStatus === 'Occupied' && (
                                           <div className="flex gap-1.5 justify-end">
                                             <button
                                               onClick={() => {
@@ -5198,7 +5210,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                       </div>
                     ))
                   ) : (
-                    (showCrossBranch ? otherBranchRooms.filter(r => r.status === 'Available') : rooms.filter(r => roomStatusFilter === 'All' || r.status === roomStatusFilter))
+                    (showCrossBranch ? otherBranchRooms.filter(r => getRoomEffectiveStatus(r) === 'Available') : rooms.filter(r => roomStatusFilter === 'All' || getRoomEffectiveStatus(r) === roomStatusFilter))
                     .filter(r => {
                       const query = searchQuery.toLowerCase().trim();
                       return (
@@ -5213,9 +5225,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                         b.status === 'CheckedIn' && 
                         (b.branch === room.branch || !b.branch || b.branch === branch)
                       ) || null;
-                      const isOccupied = room.status === 'Occupied' || !!activeBooking;
-                      const isMaintenance = room.status === 'Maintenance' && !activeBooking;
-                      const isCleaning = room.status === 'Cleaning' && !activeBooking;
+                      const effectiveStatus = getRoomEffectiveStatus(room);
+                      const isOccupied = effectiveStatus === 'Occupied';
+                      const isMaintenance = effectiveStatus === 'Maintenance';
+                      const isCleaning = effectiveStatus === 'Cleaning';
 
                       let radarBorder = isOccupied ? 'border-blue-500/20' : isMaintenance ? 'border-red-500/20' : isCleaning ? 'border-amber-500/20' : '';
                       if (isOccupied && activeBooking) {
@@ -5246,8 +5259,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               <span className={`text-2xl font-black font-mono ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{room.roomNumber}</span>
                             </div>
 
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono border uppercase tracking-wider ${getRoomStatusClasses(room.status, isDarkMode)}`}>
-                              {room.status}
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono border uppercase tracking-wider ${getRoomStatusClasses(effectiveStatus, isDarkMode)}`}>
+                              {effectiveStatus}
                             </span>
                           </div>
 
@@ -5379,7 +5392,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               </div>
                             ) : (
                               <>
-                                {room.status === 'Available' && (
+                                {effectiveStatus === 'Available' && (
                                   <div className="space-y-2">
                                     <button
                                       onClick={() => handleOpenBooking(room)}
@@ -5412,7 +5425,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                   </div>
                                 )}
 
-                                {room.status === 'Occupied' && (
+                                {effectiveStatus === 'Occupied' && (
                                   <div className="grid grid-cols-2 gap-2">
                                     <button
                                       onClick={() => {
@@ -5443,7 +5456,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                   </div>
                                 )}
 
-                                {room.status === 'Cleaning' && (
+                                {effectiveStatus === 'Cleaning' && (
                                   <div className="grid grid-cols-2 gap-2">
                                     <button
                                       onClick={() => handleUpdateRoomStatus(room, 'Available')}
@@ -5464,7 +5477,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                   </div>
                                 )}
 
-                                {room.status === 'Maintenance' && (
+                                {effectiveStatus === 'Maintenance' && (
                                   <div className="grid grid-cols-2 gap-2">
                                     <button
                                       onClick={() => handleUpdateRoomStatus(room, 'Available')}
