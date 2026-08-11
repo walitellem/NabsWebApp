@@ -8793,10 +8793,32 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               <span>Total Gross Charges:</span>
                               <span>GH₵{total.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-emerald-600 font-semibold print:text-black">
-                              <span>Payments Made:</span>
-                              <span>- GH₵{paymentsMade.toFixed(2)}</span>
+                            
+                            {/* Explicit Payment Breakdown */}
+                            <div className="pt-1 space-y-1 text-emerald-600 font-semibold print:text-black">
+                              {hasLateFee && Number(invoiceBooking?.priorAmountPaid || 0) > 0 ? (
+                                <>
+                                  <div className="flex justify-between text-xs print:text-[10px]">
+                                    <span>Initial Room Payment:</span>
+                                    <span>- GH₵{Number(invoiceBooking.priorAmountPaid || 0).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs print:text-[10px]">
+                                    <span>Checkout Settlement:</span>
+                                    <span>- GH₵{Math.max(0, paymentsMade - Number(invoiceBooking.priorAmountPaid || 0)).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between border-t border-emerald-200/50 pt-1 mt-1 print:border-dashed">
+                                    <span>Total Payments Made:</span>
+                                    <span>- GH₵{paymentsMade.toFixed(2)}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex justify-between">
+                                  <span>Payments Made:</span>
+                                  <span>- GH₵{paymentsMade.toFixed(2)}</span>
+                                </div>
+                              )}
                             </div>
+
                             <div className="border-t border-double border-zinc-300 pt-2.5 flex justify-between font-black text-base text-blue-600 print:pt-1 print:border-t-dashed print:border-zinc-300 print:text-black print:text-xs">
                               <span>{isReceipt ? 'Balance Remaining:' : 'Total Balance Due:'}</span>
                               <span>GH₵{balanceDue.toFixed(2)}</span>
