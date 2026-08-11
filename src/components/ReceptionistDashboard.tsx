@@ -3562,16 +3562,17 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
         const userAssignedBranch = currentUser.assignedBranch || currentUser.branch || branch;
 
+        const priorPaidAmount = getActualPaidAmount(selectedBooking);
         await setDoc(doc(db, 'bookings', selectedBooking.id), {
           status: 'CheckedOut',
-          paymentStatus: 'Paid',
+          paymentStatus: lateCheckOutFeeApplied > 0 ? 'Partial' : 'Paid',
           totalPrice: finalTotalPrice,
-          amountPaid: totalAmountCollected,
-          deposit: totalAmountCollected,
+          amountPaid: lateCheckOutFeeApplied > 0 ? priorPaidAmount : totalAmountCollected,
+          deposit: lateCheckOutFeeApplied > 0 ? priorPaidAmount : totalAmountCollected,
           discountType: finalDiscountType,
           discountAmount: finalDiscountAmount,
-          balance_due: 0,
-          pending_payment: 0,
+          balance_due: lateCheckOutFeeApplied,
+          pending_payment: lateCheckOutFeeApplied,
           lateCheckOutFeeApplied,
           actualCheckOutDate: checkoutDateStr,
           branch: branch,
@@ -3677,13 +3678,15 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       setActiveBooking(null);
 
       // Launch final settlement invoice view showing the breakdown of the stay
+      const priorPaidAmount = getActualPaidAmount(selectedBooking);
       setInvoiceBooking({
         ...selectedBooking,
         status: 'CheckedOut',
-        paymentStatus: 'Paid',
+        paymentStatus: lateCheckOutFeeApplied > 0 ? 'Partial' : 'Paid',
         totalPrice: finalTotalPrice,
-        amountPaid: finalTotalPrice,
-        deposit: finalTotalPrice,
+        amountPaid: lateCheckOutFeeApplied > 0 ? priorPaidAmount : finalTotalPrice,
+        priorAmountPaid: priorPaidAmount,
+        deposit: lateCheckOutFeeApplied > 0 ? priorPaidAmount : finalTotalPrice,
         discountType: finalDiscountType,
         discountAmount: finalDiscountAmount,
         lateCheckOutFeeApplied,
@@ -8359,17 +8362,16 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
           let paymentsMade = getActualPaidAmount(invoiceBooking);
           const hasLateFee = Number((invoiceBooking as any).lateCheckOutFeeApplied || 0) > 0;
-          if (invoiceBooking.status === 'CheckedOut') {
+          if (hasLateFee) {
+            const priorVal = Number((invoiceBooking as any).priorAmountPaid || 0);
+            paymentsMade = priorVal > 0 ? priorVal : Math.max(0, totalGross - lateCheckOutFeeApplied);
+          } else if (invoiceBooking.status === 'CheckedOut' || invoiceType === 'CheckOut') {
             paymentsMade = totalGross;
-          } else if (invoiceType === 'CheckOut' && !hasLateFee) {
-            paymentsMade = totalGross;
-          } else if (invoiceType === 'CheckOut' && hasLateFee) {
-            paymentsMade = roomStayTotal;
           } else if (invoiceBooking.paymentStatus === 'Paid') {
             paymentsMade = Math.max(paymentsMade, roomStayTotal);
           }
           const balanceDue = Math.max(0, totalGross - paymentsMade);
-          const isReceipt = balanceDue <= 0 || invoiceType === 'CheckOut' || invoiceBooking.status === 'CheckedOut';
+          const isReceipt = balanceDue <= 0 && !hasLateFee;
           const documentLabel = isReceipt ? 'Receipt' : 'Invoice';
           const invoiceNum = `${isReceipt ? 'REC' : 'INV'}-${invoiceBooking.id.replace('book_', '').toUpperCase()}`;
           const dateOfIssue = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
@@ -8647,8 +8649,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                               <div className="print:hidden">
                                 <span className="text-zinc-500">Status:</span> 
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  invoiceType === 'CheckOut' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
-                                }`}>{invoiceType === 'CheckOut' ? 'SETTLED' : 'ISSUED'}</span>
+                                  balanceDue > 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : (invoiceType === 'CheckOut' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20')
+                                }`}>{balanceDue > 0 ? 'PENDING SETTLEMENT' : (invoiceType === 'CheckOut' ? 'SETTLED' : 'ISSUED')}</span>
                               </div>
                             </div>
                           </div>
