@@ -361,11 +361,16 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                   table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10px !important; }
                   th, td { border: 1px solid #d1d5db; padding: 4px 6px !important; text-align: left; }
                   th { background-color: #f3f4f6; font-weight: 600; }
-                  .flex, .grid, [class*="flex-"], [class*="grid-"] {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: 4px !important;
-                  }
+                                     .grid, [class*="grid-"] {
+                     display: flex !important;
+                     flex-direction: column !important;
+                     gap: 4px !important;
+                   }
+                   .flex-row, .logo-header-row, [class*="flex-row"] {
+                     display: flex !important;
+                     flex-direction: row !important;
+                     align-items: center !important;
+                   }
                   .no-print, button, [data-html2canvas-ignore] { display: none !important; }
                 </style>
               </head>
@@ -1014,11 +1019,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
             paymentStatus: 'Paid' as const,
             paidAmount: sale.totalPrice,
             unpaidAmount: 0,
-            settledPaymentMethod: bookingPaymentMethod,
-            timestamp: getFormattedDateTime(),
-            dateCreated: serverTimestamp(),
-            receptionistId: currentUser.id,
-            receptionistName: currentUser.name
+            settledPaymentMethod: bookingPaymentMethod
           };
           await setDoc(doc(db, 'drinkSales', sale.id), updatedSale, { merge: true });
         }
@@ -1029,10 +1030,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               paymentStatus: 'Paid' as const, 
               paidAmount: s.totalPrice, 
               unpaidAmount: 0,
-              settledPaymentMethod: bookingPaymentMethod,
-              timestamp: getFormattedDateTime(),
-              receptionistId: currentUser.id,
-              receptionistName: currentUser.name
+              settledPaymentMethod: bookingPaymentMethod
             };
           }
           return s;
@@ -1640,38 +1638,31 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     try {
       const roomsQ = query(collection(db, 'rooms'));
       unsubRooms = onSnapshot(roomsQ, (snapshot) => {
-        if (!snapshot.empty) {
-          const fetched = snapshot.docs.map((doc) => {
-            const data = doc.data() || {};
-            return {
-              id: doc.id,
-              roomNumber: String(data.roomNumber || ''),
-              roomType: String(data.roomType || 'Standard'),
-              price: typeof data.price === 'number' ? data.price : Number(data.price || 0),
-              status: (data.status || 'Available') as RoomStatus,
-              branch: (data.branch || 'Annex') as Branch,
-              amenities: Array.isArray(data.amenities) ? data.amenities : [],
-              description: String(data.description || ''),
-              maxGuests: typeof data.maxGuests === 'number' ? data.maxGuests : Number(data.maxGuests || 2),
-              normalBookingPrice: typeof data.normalBookingPrice === 'number' ? data.normalBookingPrice : (data.normalBookingPrice ? Number(data.normalBookingPrice) : undefined),
-              normalBookingMaxGuests: typeof data.normalBookingMaxGuests === 'number' ? data.normalBookingMaxGuests : (data.normalBookingMaxGuests ? Number(data.normalBookingMaxGuests) : undefined),
-              occasionBookingPrice: typeof data.occasionBookingPrice === 'number' ? data.occasionBookingPrice : (data.occasionBookingPrice ? Number(data.occasionBookingPrice) : undefined),
-              occasionBookingMaxGuests: typeof data.occasionBookingMaxGuests === 'number' ? data.occasionBookingMaxGuests : (data.occasionBookingMaxGuests ? Number(data.occasionBookingMaxGuests) : undefined),
-              monthlyPremiumPrice: typeof data.monthlyPremiumPrice === 'number' ? data.monthlyPremiumPrice : (data.monthlyPremiumPrice ? Number(data.monthlyPremiumPrice) : undefined)
-            } as Room;
-          });
-          setRooms(fetched.filter(r => r.branch === branch));
-          setOtherBranchRooms(fetched.filter(r => r.branch !== branch));
-          try {
-            saveRooms(fetched);
-          } catch (err) {
-            console.warn("Local storage rooms merge error:", err);
-          }
-        } else {
-          // Fall back to local branch rooms if Firestore collection has no documents
-          const allRooms = getRooms();
-          setRooms(allRooms.filter(r => r.branch === branch));
-          setOtherBranchRooms(allRooms.filter(r => r.branch !== branch));
+        const fetched = snapshot.docs.map((doc) => {
+          const data = doc.data() || {};
+          return {
+            id: doc.id,
+            roomNumber: String(data.roomNumber || ''),
+            roomType: String(data.roomType || 'Standard'),
+            price: typeof data.price === 'number' ? data.price : Number(data.price || 0),
+            status: (data.status || 'Available') as RoomStatus,
+            branch: (data.branch || 'Annex') as Branch,
+            amenities: Array.isArray(data.amenities) ? data.amenities : [],
+            description: String(data.description || ''),
+            maxGuests: typeof data.maxGuests === 'number' ? data.maxGuests : Number(data.maxGuests || 2),
+            normalBookingPrice: typeof data.normalBookingPrice === 'number' ? data.normalBookingPrice : (data.normalBookingPrice ? Number(data.normalBookingPrice) : undefined),
+            normalBookingMaxGuests: typeof data.normalBookingMaxGuests === 'number' ? data.normalBookingMaxGuests : (data.normalBookingMaxGuests ? Number(data.normalBookingMaxGuests) : undefined),
+            occasionBookingPrice: typeof data.occasionBookingPrice === 'number' ? data.occasionBookingPrice : (data.occasionBookingPrice ? Number(data.occasionBookingPrice) : undefined),
+            occasionBookingMaxGuests: typeof data.occasionBookingMaxGuests === 'number' ? data.occasionBookingMaxGuests : (data.occasionBookingMaxGuests ? Number(data.occasionBookingMaxGuests) : undefined),
+            monthlyPremiumPrice: typeof data.monthlyPremiumPrice === 'number' ? data.monthlyPremiumPrice : (data.monthlyPremiumPrice ? Number(data.monthlyPremiumPrice) : undefined)
+          } as Room;
+        });
+        setRooms(fetched.filter(r => r.branch === branch));
+        setOtherBranchRooms(fetched.filter(r => r.branch !== branch));
+        try {
+          saveRooms(fetched);
+        } catch (err) {
+          console.warn("Local storage rooms merge error:", err);
         }
         setIsLoadingData(false);
       }, (err) => {
@@ -1698,10 +1689,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
       const logsQ = query(collection(db, 'auditLogs'), where('branch', '==', branch));
       unsubLogs = onSnapshot(logsQ, (snapshot) => {
-        if (!snapshot.empty) {
-          const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
-          setLogs(fetched);
-        }
+        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+        setLogs(fetched);
       }, (err) => {
         console.warn("Firestore logs snapshot listener error:", err);
       });
@@ -1711,10 +1700,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         snapshot.forEach((doc) => {
           catalogData.push({ id: doc.id, ...doc.data() });
         });
-        if (catalogData.length > 0) {
-          setActivityCatalog(catalogData);
-          saveActivityCatalog(catalogData);
-        }
+        setActivityCatalog(catalogData);
+        saveActivityCatalog(catalogData);
       }, (err) => {
         console.warn("Firestore activity catalog snapshot listener error:", err);
       });
@@ -1756,10 +1743,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         snapshot.forEach(docSnap => {
           fetched.push({ id: docSnap.id, ...docSnap.data() } as DrinkItem);
         });
-        if (fetched.length > 0) {
-          setDrinks(fetched);
-          saveDrinks(fetched);
-        }
+        setDrinks(fetched);
+        saveDrinks(fetched);
       }, (err) => {
         console.warn("Firestore drinks snapshot error:", err);
       });
@@ -3654,11 +3639,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               paymentStatus: 'Paid' as const,
               paidAmount: sale.totalPrice,
               unpaidAmount: 0,
-              settledPaymentMethod: checkoutPaymentMethod,
-              timestamp: checkoutDateStr,
-              dateCreated: serverTimestamp(),
-              receptionistId: currentUser.id,
-              receptionistName: currentUser.name
+              settledPaymentMethod: checkoutPaymentMethod
             };
             await setDoc(doc(db, 'drinkSales', sale.id), updatedSale, { merge: true });
           }
@@ -3669,10 +3650,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                 paymentStatus: 'Paid' as const, 
                 paidAmount: s.totalPrice, 
                 unpaidAmount: 0, 
-                settledPaymentMethod: checkoutPaymentMethod,
-                timestamp: checkoutDateStr,
-                receptionistId: currentUser.id,
-                receptionistName: currentUser.name
+                settledPaymentMethod: checkoutPaymentMethod
               };
             }
             return s;
@@ -4429,14 +4407,12 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm bg-blue-600 text-white">
-                R
-              </div>
+            <div className="flex flex-row items-center gap-2">
+              <NabsLodgeLogo size="xs" />
               <h1 className="font-bold tracking-tight text-sm text-zinc-900 dark:text-zinc-50">{branch}</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-row items-center gap-2">
             <button onClick={onOpenTutorial} title="Onboarding Guide" className="p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-blue-600 dark:text-blue-400 hover:bg-zinc-50 dark:hover:bg-zinc-800">
               <HelpCircle className="w-4 h-4" />
             </button>
@@ -4976,7 +4952,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-row items-center gap-2">
                         <span className="text-xs font-bold font-mono uppercase tracking-wider">
                           {showCrossBranch 
                             ? `📍 Live View: Available Rooms at ${branch === 'Annex' ? 'Ayigya' : 'Annex'} Branch`
@@ -6647,7 +6623,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {/* Active Shift Guidelines */}
           <div className={`p-6 rounded-xl w-full h-full flex flex-col justify-between gap-6 transition-colors ${theme.card}`}>
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-row items-center gap-2">
                 <Shield className={`w-4 h-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
                 <h3 className={`text-xs font-mono uppercase tracking-widest ${theme.text}`}>Shift Protocol</h3>
               </div>
@@ -7263,9 +7239,17 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                       isDarkMode ? 'bg-black border-zinc-850 text-zinc-100' : 'bg-white border-slate-300 text-slate-850'
                     }`}
                   >
-                    <div className="text-center border-b pb-3 border-dashed border-zinc-800/20 dark:border-zinc-800">
-                      <h4 className="text-xs font-black uppercase tracking-wider">NABSLODGE</h4>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Official Guest Invoice & Checkout Folio</p>
+                    <div className="flex items-center justify-between border-b pb-3 border-dashed border-zinc-800/20 dark:border-zinc-800">
+                      <div className="flex flex-row items-center gap-2">
+                        <NabsLodgeLogo size="sm" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider">NABSLODGE</h4>
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Official Guest Invoice & Checkout Folio</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-400 font-mono block">Room {selectedBooking.roomNumber}</span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
@@ -8458,9 +8442,9 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                   body * {
                     display: none !important;
                   }
-                  .printable-invoice-modal, .printable-invoice-modal * {
-                    display: block !important;
-                  }
+                  .printable-invoice-modal {
+                     display: block !important;
+                   }
                   .printable-invoice-modal {
                     position: absolute !important;
                     left: 0 !important;
@@ -8502,18 +8486,22 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                     display: table-cell !important;
                     padding: 4px !important;
                   }
-                  .printable-invoice-modal .flex, 
                   .printable-invoice-modal .grid {
                     display: flex !important;
                     flex-direction: column !important;
                     gap: 4px !important;
                   }
-                  .printable-invoice-modal .flex-row, 
-                  .printable-invoice-modal .grid-cols-2 {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: 2px !important;
-                  }
+                  .printable-invoice-modal .flex-row {
+                     display: flex !important;
+                     flex-direction: row !important;
+                     gap: 12px !important;
+                     align-items: center !important;
+                   }
+                   .printable-invoice-modal .grid-cols-2 {
+                     display: flex !important;
+                     flex-direction: column !important;
+                     gap: 2px !important;
+                   }
                   .no-print, button, .no-print *, [data-html2canvas-ignore] {
                     display: none !important;
                   }
@@ -8695,19 +8683,25 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                         
                         {/* Letterhead Logo / Branding Header */}
                         {invoicePrintShowBranding && (
-                          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-zinc-200 print:flex-col print:gap-1 print:pb-2 print:border-b-dashed print:border-zinc-300">
-                            <div className="flex items-center gap-3">
-                              <NabsLodgeLogo size="lg" />
-                              <div>
-                                <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 print:text-base">NABS LODGE</h1>
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-zinc-200 print:flex-row print:items-center print:gap-4 print:pb-2 print:border-b-dashed print:border-zinc-300">
+                            <table style={{ width: '100%', marginBottom: '16px', border: 'none', tableLayout: 'fixed' }} className="logo-header-row">
+      <tbody>
+        <tr>
+          <td style={{ width: '64px', verticalAlign: 'middle', border: 'none', padding: '0 16px 0 0' }}>
+            <NabsLodgeLogo size="lg" />
+          </td>
+          <td style={{ verticalAlign: 'middle', border: 'none', padding: '0' }}>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 print:text-base" style={{ margin: 0 }}>NABS LODGE</h1>
                                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest print:text-[10px] print:tracking-normal print:mt-0">
                                   Nabslodge {branch}
                                 </p>
                                 <p className="text-[10px] text-zinc-400 font-mono mt-0.5 print:text-[8px] print:mt-0">
                                   Official {invoiceType === 'CheckIn' ? 'Check-In Booking' : 'Check-Out Settlement'} {documentLabel}
                                 </p>
-                              </div>
-                            </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                             <div className="text-left sm:text-right font-mono text-xs space-y-1 print:text-[10px] print:space-y-0.5 print:text-left">
                               <div><span className="text-zinc-500">{documentLabel} No:</span> <strong className="font-bold">{invoiceNum}</strong></div>
                               <div><span className="text-zinc-500">Date of Issue:</span> <span>{dateOfIssue}</span></div>
@@ -10209,12 +10203,21 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               }`}
             >
               <div className="flex items-start justify-between pb-6 border-b border-zinc-200 dark:border-zinc-800">
-                <div>
-                  <h2 className="text-xl font-black tracking-tight text-blue-600 dark:text-blue-400">NABSLODGE</h2>
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 mt-0.5">
-                    Walk-In Activity Revenue Invoice & Receipt
-                  </p>
-                </div>
+                <table style={{ width: '100%', marginBottom: '16px', border: 'none', tableLayout: 'fixed' }} className="logo-header-row">
+      <tbody>
+        <tr>
+          <td style={{ width: '48px', verticalAlign: 'middle', border: 'none', padding: '0 16px 0 0' }}>
+            <NabsLodgeLogo size="sm" />
+          </td>
+          <td style={{ verticalAlign: 'middle', border: 'none', padding: '0' }}>
+            <h2 className="text-xl font-black tracking-tight text-blue-600 dark:text-blue-400" style={{ margin: 0 }}>NABSLODGE</h2>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 mt-0.5">
+                      Walk-In Activity Revenue Invoice & Receipt
+                    </p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
                 <div className="text-right">
                   <span className="text-xs font-mono font-bold block text-amber-500">
                     {walkInReceiptData.serialNumber || 'ACT-2026'}
