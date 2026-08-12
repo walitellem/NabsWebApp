@@ -458,6 +458,13 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
   const [otherBranchRooms, setOtherBranchRooms] = useState<Room[]>([]);
   const [showCrossBranch, setShowCrossBranch] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+
+  const dynamicRooms = useMemo(() => {
+    return rooms.map(r => {
+      const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && b.branch === branch && (b.status === 'CheckedIn' || b.status === 'checked_in'));
+      return { ...r, status: isOccupied ? 'Occupied' : r.status };
+    });
+  }, [rooms, bookings, branch]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -4822,10 +4829,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'rooms' && (
             <motion.div
               key="rooms"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="space-y-6 flex-1 w-full"
             >
               {/* Controls: search and room-status filters */}
@@ -4880,7 +4887,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                         }`}
                       >
                         <Globe className="w-3 h-3 text-purple-500" />
-                        {branch === 'Annex' ? 'Ayigya' : 'Annex'} Available ({otherBranchRooms.filter(r => r.status === 'Available').length})
+                        {branch === 'Annex' ? 'Ayigya' : 'Annex'} Available ({otherBranchRooms.filter(r => getRoomEffectiveStatus(r) === 'Available').length})
                       </button>
                       <div className={`w-px h-6 my-auto ${isDarkMode ? 'bg-zinc-800' : 'bg-slate-200'}`}></div>
                       <button
@@ -4960,11 +4967,11 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                           }
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          otherBranchRooms.filter(r => r.status === 'Available').length > 0 
+                          otherBranchRooms.filter(r => getRoomEffectiveStatus(r) === 'Available').length > 0 
                             ? 'bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30' 
                             : 'bg-zinc-500/20 text-zinc-500 dark:text-zinc-400'
                         }`}>
-                          {otherBranchRooms.filter(r => r.status === 'Available').length} Available
+                          {otherBranchRooms.filter(r => getRoomEffectiveStatus(r) === 'Available').length} Available
                         </span>
                       </div>
                       <p className={`text-[11px] mt-0.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
@@ -5497,10 +5504,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'quickCalendar' && (
             <motion.div
               key="quickCalendar"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="space-y-6 flex-1 w-full max-w-7xl mx-auto"
             >
               <QuickAvailabilityCalendar
@@ -5514,10 +5521,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'reservations' && (
             <motion.div
               key="reservations"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`border rounded-3xl p-6 space-y-6 transition-colors ${
                 theme.card
               }`}
@@ -5555,7 +5562,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                         ))
                       }
                     </select>
-                    {rooms.filter(r => r.status === 'Available').length === 0 && (
+                    {rooms.filter(r => getRoomEffectiveStatus(r) === 'Available').length === 0 && (
                       <p className="text-[10px] text-red-500 mt-1 font-semibold">⚠ No rooms are currently available for booking at this branch.</p>
                     )}
                   </div>
@@ -6039,10 +6046,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'history' && (
             <motion.div
               key="history"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`border rounded-3xl p-6 space-y-6 transition-colors ${
                 theme.card
               }`}
@@ -6334,10 +6341,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'activityLedger' && (
             <motion.div
               key="activityLedger"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="space-y-6 flex-1 w-full"
             >
               <WalkInActivityLedger 
@@ -6369,10 +6376,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           {activeTab === 'drinks' && (
             <motion.div
               key="drinks"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="space-y-6 flex-1 w-full"
             >
               {/* Header and top buttons */}
@@ -9235,7 +9242,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                     className={`block w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${theme.input}`}
                   >
                     <option value="" disabled>Select an available room</option>
-                    {rooms.filter(r => r.status === 'Available').map(r => (
+                    {dynamicRooms.filter(r => r.status === 'Available').map(r => (
                       <option key={r.id} value={r.id}>Room {r.roomNumber} - {r.roomType} (GH₵{r.price}/night)</option>
                     ))}
                   </select>
@@ -10497,7 +10504,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                       className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
                     >
                       <option value="">-- Non-Resident / Walk-In --</option>
-                      {rooms.filter(r => r.status === 'Occupied' || r.guestName).map(r => (
+                      {dynamicRooms.filter(r => r.status === 'Occupied' || r.guestName).map(r => (
                         <option key={r.roomNumber} value={r.roomNumber}>
                           Room {r.roomNumber} ({r.guestName || 'Occupied'})
                         </option>
@@ -10838,7 +10845,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                     className={`w-full px-3 py-2 rounded-xl border text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all ${theme.input}`}
                   >
                     <option value="">-- Non-Resident / Walk-In --</option>
-                    {rooms.filter(r => r.status === 'Occupied').map(r => (
+                    {dynamicRooms.filter(r => r.status === 'Occupied').map(r => (
                       <option key={r.roomNumber} value={r.roomNumber}>
                         Room {r.roomNumber} ({r.guestName})
                       </option>

@@ -3713,10 +3713,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             {activeTab === 'overview' && (
               <motion.div
                 key="overview"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="space-y-6"
               >
                 {/* Manager Pending Booking Edit Notification Banner */}
@@ -4310,10 +4310,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             {activeTab === 'receptionists' && (
               <motion.div
                 key="receptionists"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="space-y-6"
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -4442,10 +4442,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             {activeTab === 'rooms' && (
               <motion.div
                 key="rooms"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="space-y-6"
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -4616,10 +4616,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             {activeTab === 'settings' && (
               <motion.div
                 key="settings"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="space-y-6"
               >
                 <div className={`border rounded-3xl p-6 ${theme.card}`}>
@@ -6534,7 +6534,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                         return (
                           <div className="space-y-8">
                             {branchesToDisplay.map(branchName => {
-                              const branchRooms = filtered.filter(r => r.branch === branchName);
+                              const branchRooms = filtered.filter(r => r.branch === branchName).map(r => {
+                                const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && b.branch === branchName && (b.status === 'CheckedIn' || b.status === 'checked_in'));
+                                return { ...r, status: isOccupied ? 'Occupied' : r.status };
+                              });
                               if (branchRooms.length === 0 && liveViewBranchFilter === 'ALL') return null;
 
                               return (
@@ -6661,10 +6664,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             {activeTab === 'financials' && (
               <motion.div
                 key="financials"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="space-y-6"
               >
                 <div>
