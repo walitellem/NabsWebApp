@@ -1246,13 +1246,16 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
   const unifiedTransactions = React.useMemo(() => [
     ...coreLodgeTransactions.map(t => ({
       ...t,
-      isDrink: (t as any).revenueType === 'DrinkSettlement'
+      isDrink: (t as any).revenueType === 'DrinkSettlement',
+      category: (t as any).revenueType === 'DrinkSettlement' ? 'Drink' : 
+                (t as any).revenueType === 'ExtensionFee' ? 'Extension' : 'Lodging'
     })),
     ...activityTransactions.map(a => ({
       ...a,
       branch: a.branch || a.lodgeBranch || 'Annex',
       amountVal: Number(a.amountPaid !== undefined && a.amountPaid !== null ? a.amountPaid : (a.totalPrice || 0)),
-      timestamp: a.timestamp || a.dateCreated || a.createdAt
+      timestamp: a.timestamp || a.dateCreated || a.createdAt,
+      category: 'Activity'
     })),
     ...drinkSales.filter(s => !isDrinkSettledToRoom(s)).map(s => {
       const paid = getDrinkPaidAmount(s);
@@ -1260,7 +1263,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         ...s,
         amountVal: paid,
         timestamp: s.timestamp || (s as any).dateCreated || (s as any).createdAt,
-        isDrink: true
+        isDrink: true,
+        category: 'Drink'
       };
     })
   ], [coreLodgeTransactions, activityTransactions, drinkSales]);
@@ -3416,9 +3420,21 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       const date = new Date(targetYear, i, 1);
 
       const targetMonthTxs = getCoreLodgeRevenueForYearMonth(targetYear, monthNum);
-      const annexRev = targetMonthTxs.filter(t => t.branch === 'Annex' || (t as any).lodgeBranch === 'Annex').reduce((sum, t) => sum + (t.amountVal || 0), 0);
-      const ayigyaRev = targetMonthTxs.filter(t => t.branch === 'Ayigya' || (t as any).lodgeBranch === 'Ayigya').reduce((sum, t) => sum + (t.amountVal || 0), 0);
-      const totalRev = annexRev + ayigyaRev;
+      
+      const getBranchBreakdown = (branch: string) => {
+        const branchTxs = targetMonthTxs.filter(t => t.branch === branch || (t as any).lodgeBranch === branch);
+        return {
+          lodging: branchTxs.filter(t => t.category === 'Lodging').reduce((sum, t) => sum + (t.amountVal || 0), 0),
+          extension: branchTxs.filter(t => t.category === 'Extension').reduce((sum, t) => sum + (t.amountVal || 0), 0),
+          activity: branchTxs.filter(t => t.category === 'Activity').reduce((sum, t) => sum + (t.amountVal || 0), 0),
+          drinks: branchTxs.filter(t => t.category === 'Drink').reduce((sum, t) => sum + (t.amountVal || 0), 0),
+          total: branchTxs.reduce((sum, t) => sum + (t.amountVal || 0), 0)
+        };
+      };
+
+      const annexBreakdown = getBranchBreakdown('Annex');
+      const ayigyaBreakdown = getBranchBreakdown('Ayigya');
+      const totalRev = annexBreakdown.total + ayigyaBreakdown.total;
 
       const prevMonthTxs = getCoreLodgeRevenueForYearMonth(previousYear, monthNum);
       const prevAnnexRev = prevMonthTxs.filter(t => t.branch === 'Annex' || (t as any).lodgeBranch === 'Annex').reduce((sum, t) => sum + (t.amountVal || 0), 0);
@@ -3427,10 +3443,12 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
       return {
         month: date.toLocaleString('default', { month: 'short' }),
-        'Annex': annexRev,
-        'Ayigya': ayigyaRev,
+        'Annex': annexBreakdown.total,
+        'Ayigya': ayigyaBreakdown.total,
         'Total': totalRev,
-        'Previous Year Total': prevYearTotalRev
+        'Previous Year Total': prevYearTotalRev,
+        'AnnexBreakdown': annexBreakdown,
+        'AyigyaBreakdown': ayigyaBreakdown
       };
     });
 
@@ -3838,23 +3856,92 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                   )}
 
                   {selectedSnapshot.data?.monthlyData && (
-                    <div className="border rounded-2xl p-4 bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-800 space-y-3">
-                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-white uppercase tracking-wider">Branch Contribution Breakdown</h4>
-                      <div className="space-y-2 text-sm">
-                        {selectedSnapshot.data.monthlyData.map((item: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-200 dark:border-zinc-800/60 last:border-0">
-                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{item.name || `Period ${idx + 1}`}</span>
-                            <div className="text-right">
-                              <span className="font-bold text-zinc-900 dark:text-white">GH₵ {(item.Total || 0).toLocaleString()}</span>
-                              {(item.Annex !== undefined || item.Ayigya !== undefined) && (
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  Annex: GH₵ {(item.Annex || 0).toLocaleString()} | Ayigya: GH₵ {(item.Ayigya || 0).toLocaleString()}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Branch Performance Snapshot</h4>
+                      </div>
+                      
+                      {(() => {
+                        const monthShort = selectedSnapshot.month.substring(0, 3);
+                        const monthData = selectedSnapshot.data.monthlyData.find((m: any) => m.month === monthShort) || selectedSnapshot.data.monthlyData[0];
+                        
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* NABSLODGE ANNEX CARD */}
+                            <div className={`border rounded-2xl p-5 space-y-4 ${theme.card} bg-zinc-50/50 dark:bg-zinc-900/50 shadow-sm`}>
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                    <Building className="w-4 h-4" />
+                                  </div>
+                                  <h5 className="font-bold text-sm text-zinc-900 dark:text-white">Nabslodge Annex</h5>
                                 </div>
-                              )}
+                              </div>
+
+                              <div className="border rounded-xl p-3 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+                                <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-400">Total Revenue</span>
+                                <div className="text-sm font-bold mt-1 font-mono text-zinc-900 dark:text-zinc-200">GH₵{(monthData.Annex || 0).toLocaleString()}</div>
+                              </div>
+                              
+                              <div className="space-y-2 text-xs pt-1">
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Lodging revenue</span>
+                                  <span className="font-mono font-bold text-zinc-900 dark:text-zinc-200">GH₵{(monthData.AnnexBreakdown?.lodging || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Extended Checkout revenue</span>
+                                  <span className="font-mono font-bold text-zinc-900 dark:text-zinc-200">GH₵{(monthData.AnnexBreakdown?.extension || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Activity Revenue</span>
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">GH₵{(monthData.AnnexBreakdown?.activity || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Drink sales</span>
+                                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">GH₵{(monthData.AnnexBreakdown?.drinks || 0).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* NABSLODGE AYIGYA CARD */}
+                            <div className={`border rounded-2xl p-5 space-y-4 ${theme.card} bg-zinc-50/50 dark:bg-zinc-900/50 shadow-sm`}>
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                    <Building className="w-4 h-4" />
+                                  </div>
+                                  <h5 className="font-bold text-sm text-zinc-900 dark:text-white">Nabslodge Ayigya</h5>
+                                </div>
+                              </div>
+
+                              <div className="border rounded-xl p-3 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+                                <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-400">Total Revenue</span>
+                                <div className="text-sm font-bold mt-1 font-mono text-zinc-900 dark:text-zinc-200">GH₵{(monthData.Ayigya || 0).toLocaleString()}</div>
+                              </div>
+                              
+                              <div className="space-y-2 text-xs pt-1">
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Lodging revenue</span>
+                                  <span className="font-mono font-bold text-zinc-900 dark:text-zinc-200">GH₵{(monthData.AyigyaBreakdown?.lodging || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Extended Checkout revenue</span>
+                                  <span className="font-mono font-bold text-zinc-900 dark:text-zinc-200">GH₵{(monthData.AyigyaBreakdown?.extension || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Activity Revenue</span>
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">GH₵{(monthData.AyigyaBreakdown?.activity || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-zinc-100 dark:border-zinc-800/40 pb-1.5 text-zinc-600 dark:text-zinc-400">
+                                  <span>Drink sales</span>
+                                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">GH₵{(monthData.AyigyaBreakdown?.drinks || 0).toLocaleString()}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
