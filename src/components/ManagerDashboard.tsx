@@ -31,6 +31,7 @@ import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
 import { parseSafeDate } from '../utils/formatters';
 import { getThemeClasses, getRoomStatusClasses } from '../utils/theme';
 import { db, auth, firebaseConfig, isFirebaseConfigured, safeSetDoc, safeUpdateDoc, safeAddDoc, safeDeleteDoc, safeRunTransaction } from '../firebase';
+import { checkAndCreateSnapshot } from '../lib/snapshotUtils';
 import { doc, setDoc, getDoc, deleteDoc, addDoc, updateDoc, collection, query, where, onSnapshot, getDocs, writeBatch, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -259,6 +260,53 @@ type TabType = 'overview' | 'receptionists' | 'rooms' | 'bookings' | 'settings' 
 export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTheme, onOpenTutorial }: ManagerDashboardProps) {
   const { withLoading } = useLoading();
   const { addToast } = useToast();
+
+  const [snapshotNotifications, setSnapshotNotifications] = useState<any[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<{ notificationId: string; month: string; year: number; data: any } | null>(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'monthlySnapshotNotifications'), where('status', '==', 'unread'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSnapshotNotifications(notifications);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleOpenSnapshot = async (notification: any) => {
+    try {
+      if (notification.snapshotId) {
+        const snapDoc = await getDoc(doc(db, 'monthlySnapshots', notification.snapshotId));
+        if (snapDoc.exists()) {
+          const snapData = snapDoc.data();
+          setSelectedSnapshot({
+            notificationId: notification.id,
+            month: snapData.month,
+            year: snapData.year,
+            data: snapData.data
+          });
+          return;
+        }
+      }
+      addToast('Snapshot details not found.', 'error');
+    } catch (err) {
+      console.error(err);
+      addToast('Failed to load snapshot details.', 'error');
+    }
+  };
+
+  const handleDismissSnapshotNotification = async (notificationId: string) => {
+    try {
+      await updateDoc(doc(db, 'monthlySnapshotNotifications', notificationId), { status: 'read' });
+      setSnapshotNotifications(prev => prev.filter(n => n.id !== notificationId));
+      if (selectedSnapshot?.notificationId === notificationId) {
+        setSelectedSnapshot(null);
+      }
+      addToast('Report notification dismissed.', 'success');
+    } catch (err) {
+      console.error(err);
+    }
+  };
   
   const triggerPrint = (elementId?: string, title: string = 'Management Report') => {
     let targetEl: HTMLElement | null = null;
@@ -3394,6 +3442,12 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
   const financialData = useMemo(() => calculateFinancialData(), [unifiedTransactions, selectedYear]);
 
+  useEffect(() => {
+    if (financialData && financialData.monthlyData && financialData.monthlyData.length > 0) {
+      checkAndCreateSnapshot(financialData);
+    }
+  }, [financialData]);
+
   const yearlyReports = useMemo(() => {
     const year = selectedYear;
     const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -3704,6 +3758,125 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             </button>
           </div>
         </header>
+
+        {/* Snapshot Notifications */}
+        {snapshotNotifications.map(notification => (
+          <div 
+            key={notification.id} 
+            className="bg-emerald-600 dark:bg-emerald-700 text-white p-4 rounded-2xl mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-lg border border-emerald-500/30"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-800/60 rounded-xl">
+                <TrendingUp className="w-5 h-5 text-emerald-200" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm sm:text-base">{notification.message}</p>
+                <p className="text-xs text-emerald-100/80">Archived monthly performance breakdown available for review.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button 
+                onClick={() => handleOpenSnapshot(notification)} 
+                className="bg-white text-emerald-800 hover:bg-emerald-50 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-sm"
+              >
+                View Breakdown
+              </button>
+              <button 
+                onClick={() => handleDismissSnapshotNotification(notification.id)}
+                className="p-2 text-emerald-200 hover:text-white transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Archived Monthly Report Modal */}
+        <AnimatePresence>
+          {selectedSnapshot && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl border ${theme.card}`}
+              >
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Archived Monthly Breakdown</span>
+                    <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{selectedSnapshot.month} {selectedSnapshot.year} Performance</h3>
+                  </div>
+                  <button
+                    onClick={() => setSelectedSnapshot(null)}
+                    className="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="py-6 space-y-6">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    This snapshot was automatically captured at the end of {selectedSnapshot.month} {selectedSnapshot.year} before the active dashboard counters reset for the new month.
+                  </p>
+
+                  {selectedSnapshot.data && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Total Combined Revenue</span>
+                        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                          GH₵ {(selectedSnapshot.data.currentYearTotal || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Previous Year Comparison</span>
+                        <p className="text-2xl font-bold text-zinc-700 dark:text-zinc-300 mt-1">
+                          GH₵ {(selectedSnapshot.data.previousYearTotal || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedSnapshot.data?.monthlyData && (
+                    <div className="border rounded-2xl p-4 bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-800 space-y-3">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-white uppercase tracking-wider">Branch Contribution Breakdown</h4>
+                      <div className="space-y-2 text-sm">
+                        {selectedSnapshot.data.monthlyData.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-200 dark:border-zinc-800/60 last:border-0">
+                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{item.name || `Period ${idx + 1}`}</span>
+                            <div className="text-right">
+                              <span className="font-bold text-zinc-900 dark:text-white">GH₵ {(item.Total || 0).toLocaleString()}</span>
+                              {(item.Annex !== undefined || item.Ayigya !== undefined) && (
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                  Annex: GH₵ {(item.Annex || 0).toLocaleString()} | Ayigya: GH₵ {(item.Ayigya || 0).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  <button
+                    onClick={() => handleDismissSnapshotNotification(selectedSnapshot.notificationId)}
+                    className="px-4 py-2 text-xs sm:text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    Dismiss Notification
+                  </button>
+                  <button
+                    onClick={() => setSelectedSnapshot(null)}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         <div className="max-w-7xl mx-auto w-full">
           
@@ -4516,7 +4689,12 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                       if (!room) return null;
                       const amenities = Array.isArray(room.amenities) ? room.amenities : [];
                       const roomPriceVal = typeof room.price === 'number' ? room.price : Number(room.price || 0);
-                      const roomStatusVal = room.status || 'Available';
+                      const isRoomOccupied = room.status === 'Occupied' || !!room.guestName || bookings.some(b => 
+                        (b.roomId === room.id || String(b.roomNumber) === String(room.roomNumber)) && 
+                        (b.branch === room.branch || !b.branch) && 
+                        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+                      );
+                      const roomStatusVal = isRoomOccupied ? 'Occupied' : (room.status || 'Available');
                       const roomBranchVal = room.branch || 'Annex';
                       const roomNumVal = room.roomNumber || '';
                       const roomTypeVal = room.roomType || 'Standard';
@@ -6405,15 +6583,25 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
                 {/* Live Summary Stat Cards */}
                 {(() => {
-                  const scopeRooms = liveViewBranchFilter === 'ALL' ? rooms : rooms.filter(r => r.branch === liveViewBranchFilter);
-                  const availableRooms = scopeRooms.filter(r => r.status === 'Available');
-                  const occupiedRooms = scopeRooms.filter(r => r.status === 'Occupied');
-                  const cleaningRooms = scopeRooms.filter(r => r.status === 'Cleaning');
-                  const maintenanceRooms = scopeRooms.filter(r => r.status === 'Maintenance');
+                  const getLiveEffectiveStatus = (r: Room): RoomStatus => {
+                    const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => 
+                      (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && 
+                      (b.branch === r.branch || !b.branch) && 
+                      (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+                    );
+                    if (isOccupied) return 'Occupied';
+                    return r.status || 'Available';
+                  };
 
-                  const annexAvailable = rooms.filter(r => r.branch === 'Annex' && r.status === 'Available').length;
+                  const scopeRooms = liveViewBranchFilter === 'ALL' ? rooms : rooms.filter(r => r.branch === liveViewBranchFilter);
+                  const availableRooms = scopeRooms.filter(r => getLiveEffectiveStatus(r) === 'Available');
+                  const occupiedRooms = scopeRooms.filter(r => getLiveEffectiveStatus(r) === 'Occupied');
+                  const cleaningRooms = scopeRooms.filter(r => getLiveEffectiveStatus(r) === 'Cleaning');
+                  const maintenanceRooms = scopeRooms.filter(r => getLiveEffectiveStatus(r) === 'Maintenance');
+
+                  const annexAvailable = rooms.filter(r => r.branch === 'Annex' && getLiveEffectiveStatus(r) === 'Available').length;
                   const annexTotal = rooms.filter(r => r.branch === 'Annex').length;
-                  const ayigyaAvailable = rooms.filter(r => r.branch === 'Ayigya' && r.status === 'Available').length;
+                  const ayigyaAvailable = rooms.filter(r => r.branch === 'Ayigya' && getLiveEffectiveStatus(r) === 'Available').length;
                   const ayigyaTotal = rooms.filter(r => r.branch === 'Ayigya').length;
 
                   return (
@@ -6507,7 +6695,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                       {/* Room Display Cards Grouped by Branch */}
                       {(() => {
                         const filtered = scopeRooms.filter(room => {
-                          if (liveViewStatusFilter !== 'ALL' && room.status !== liveViewStatusFilter) return false;
+                          const effStat = getLiveEffectiveStatus(room);
+                          if (liveViewStatusFilter !== 'ALL' && effStat !== liveViewStatusFilter) return false;
                           if (liveViewTypeFilter !== 'ALL' && room.roomType !== liveViewTypeFilter) return false;
                           if (liveViewSearchQuery.trim()) {
                             const q = liveViewSearchQuery.toLowerCase();
@@ -6535,8 +6724,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                           <div className="space-y-8">
                             {branchesToDisplay.map(branchName => {
                               const branchRooms = filtered.filter(r => r.branch === branchName).map(r => {
-                                const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && b.branch === branchName && (b.status === 'CheckedIn' || b.status === 'checked_in'));
-                                return { ...r, status: isOccupied ? 'Occupied' : r.status };
+                                const effStat = getLiveEffectiveStatus(r);
+                                return { ...r, status: effStat };
                               });
                               if (branchRooms.length === 0 && liveViewBranchFilter === 'ALL') return null;
 
