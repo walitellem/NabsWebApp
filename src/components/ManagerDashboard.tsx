@@ -7044,6 +7044,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                                   .reduce((sum, s) => sum + (s.totalPrice || 0), 0);
                                                 const roomBalance = Math.max(0, activeBooking.totalPrice - actualPaid);
                                                 const totalBalanceDue = roomBalance + unpaidDrinks;
+                                                const isFullyPaid = actualPaid >= activeBooking.totalPrice;
+                                                const isPartialDeposit = actualPaid > 0 && actualPaid < activeBooking.totalPrice;
                                                 return (
                                                   <div className={`p-2.5 rounded-xl text-[11px] mt-2 space-y-1.5 border ${isDarkMode ? 'bg-blue-950/40 border-blue-500/20 text-blue-300' : 'bg-blue-50 border border-blue-200 text-blue-900'}`}>
                                                     <div className="font-bold truncate">{activeBooking.guestName}</div>
@@ -7056,18 +7058,35 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                                         <span className="font-mono font-bold">GH₵{activeBooking.totalPrice.toFixed(2)}</span>
                                                       </div>
                                                       <div className="flex justify-between items-center">
-                                                        <span className="opacity-75">Amount Settled / Paid:</span>
-                                                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">-GH₵{actualPaid.toFixed(2)}</span>
+                                                        <span className="flex items-center gap-1">
+                                                          <span className="opacity-75">
+                                                            {isPartialDeposit ? 'Deposit Paid:' : 'Deposit / Amount Paid:'}
+                                                          </span>
+                                                          {isFullyPaid ? (
+                                                            <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold rounded">
+                                                              Full
+                                                            </span>
+                                                          ) : isPartialDeposit ? (
+                                                            <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold rounded">
+                                                              Deposit
+                                                            </span>
+                                                          ) : null}
+                                                        </span>
+                                                        <span className={`font-mono font-bold ${actualPaid > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'opacity-75'}`}>
+                                                          {actualPaid > 0 ? `-GH₵${actualPaid.toFixed(2)}` : 'GH₵0.00'}
+                                                        </span>
                                                       </div>
                                                       {unpaidDrinks > 0 && (
                                                         <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 font-semibold">
-                                                          <span>Unpaid Drinks:</span>
-                                                          <span className="font-mono">+GH₵{unpaidDrinks.toFixed(2)}</span>
+                                                          <span>Unpaid Drinks (Room Bill):</span>
+                                                          <span className="font-mono font-bold">+GH₵{unpaidDrinks.toFixed(2)}</span>
                                                         </div>
                                                       )}
                                                       <div className="flex justify-between items-center font-bold pt-1 border-t border-blue-400/20">
                                                         <span>Total Balance Due:</span>
-                                                        <span className="font-mono text-purple-600 dark:text-purple-300">GH₵{totalBalanceDue.toFixed(2)}</span>
+                                                        <span className={`font-mono font-bold ${totalBalanceDue > 0 ? 'text-purple-600 dark:text-purple-300' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                          GH₵{totalBalanceDue.toFixed(2)}
+                                                        </span>
                                                       </div>
                                                     </div>
                                                     {overpaidAmount > 0 && (

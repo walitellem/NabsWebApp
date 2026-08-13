@@ -5422,25 +5422,44 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                 const overpaidAmount = Math.max(0, actualPaid - activeBooking.totalPrice);
                                 const roomBalance = Math.max(0, activeBooking.totalPrice - actualPaid);
                                 const totalBalanceDue = roomBalance + unpaidDrinks;
+                                const isFullyPaid = actualPaid >= activeBooking.totalPrice;
+                                const isPartialDeposit = actualPaid > 0 && actualPaid < activeBooking.totalPrice;
                                 return (
                                   <div className="space-y-1.5 pt-1.5 border-t border-dashed border-zinc-750">
                                     <div className="flex justify-between items-center text-[11px]">
-                                      <span className={isDarkMode ? 'text-zinc-500' : 'text-slate-400'}>Room Invoice:</span>
+                                      <span className={isDarkMode ? 'text-zinc-400' : 'text-slate-500'}>Room Invoice:</span>
                                       <span className="font-mono font-bold">GH₵{activeBooking.totalPrice.toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-[11px]">
-                                      <span className={isDarkMode ? 'text-zinc-500' : 'text-slate-400'}>Amount Settled / Paid:</span>
-                                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">-GH₵{actualPaid.toFixed(2)}</span>
+                                      <span className="flex items-center gap-1">
+                                        <span className={isDarkMode ? 'text-zinc-400' : 'text-slate-500'}>
+                                          {isPartialDeposit ? 'Deposit Paid:' : 'Deposit / Amount Paid:'}
+                                        </span>
+                                        {isFullyPaid ? (
+                                          <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold rounded">
+                                            Full
+                                          </span>
+                                        ) : isPartialDeposit ? (
+                                          <span className="text-[9px] px-1.5 py-0.2 bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold rounded">
+                                            Deposit
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                      <span className={`font-mono font-bold ${actualPaid > 0 ? 'text-emerald-600 dark:text-emerald-400' : (isDarkMode ? 'text-zinc-500' : 'text-slate-400')}`}>
+                                        {actualPaid > 0 ? `-GH₵${actualPaid.toFixed(2)}` : 'GH₵0.00'}
+                                      </span>
                                     </div>
                                     {unpaidDrinks > 0 && (
                                       <div className="flex justify-between items-center text-[11px] text-amber-500 font-semibold">
                                         <span>Unpaid Drinks (Room Bill):</span>
-                                        <span className="font-mono">GH₵{unpaidDrinks.toFixed(2)}</span>
+                                        <span className="font-mono font-bold">+GH₵{unpaidDrinks.toFixed(2)}</span>
                                       </div>
                                     )}
                                     <div className="flex justify-between items-center text-[11px] font-bold pt-1 border-t border-zinc-800">
-                                      <span className={isDarkMode ? 'text-zinc-300' : 'text-slate-700'}>Total Balance Due:</span>
-                                      <span className="font-mono text-purple-400">GH₵{totalBalanceDue.toFixed(2)}</span>
+                                      <span className={isDarkMode ? 'text-zinc-200' : 'text-slate-700'}>Total Balance Due:</span>
+                                      <span className={`font-mono font-bold ${totalBalanceDue > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                        GH₵{totalBalanceDue.toFixed(2)}
+                                      </span>
                                     </div>
                                     {overpaidAmount > 0 && (
                                       <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-600 dark:text-amber-400 font-medium space-y-1">
