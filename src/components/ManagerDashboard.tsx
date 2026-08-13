@@ -438,6 +438,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     processedBookingsCount?: number;
     branchBreakdown?: { name: string; revenue: number; volume: number }[];
     dataEntries?: any[];
+    revenueLabel?: string;
     reportType?: 'bookings' | 'monthly' | 'yearly';
   }) => {
     setPrintPreviewConfig(config);
@@ -806,7 +807,27 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
   const getHandoverBreakdownItems = (handover: HandoverRecord): HandoverItemBreakdown[] => {
     if (handover.itemsBreakdown && handover.itemsBreakdown.length > 0) {
-      return handover.itemsBreakdown;
+      return handover.itemsBreakdown.map(item => {
+        if (item.type === 'Room Booking') {
+          const b = bookings.find(book => book.id === item.bookingId || book.id === item.id);
+          if (b) {
+            const isFuture = new Date(b.checkInDate) > new Date(item.timestamp || handover.timestamp);
+            const isSettlement = item.serviceOrType === 'Check-in Balance Settlement' || item.description.includes('Balance Settlement');
+            const total = item.totalStayCost || b.totalPrice || 0;
+            const prev = item.previousDeposits || 0;
+            
+            return {
+              ...item,
+              totalStayCost: total,
+              depositAmount: item.depositAmount || b.amountPaid || item.amount,
+              previousDeposits: prev,
+              balanceSettled: item.balanceSettled || b.paymentStatus === 'Paid',
+              paymentCategory: item.paymentCategory || (isFuture ? 'Future Lock-In' : (isSettlement ? 'Balance Settlement' : 'Check-in'))
+            };
+          }
+        }
+        return item;
+      });
     }
     
     // Dynamic fallback matching for legacy handovers
@@ -850,6 +871,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
 
       items.push({
         id: b.id,
+        bookingId: b.id,
         type: 'Room Booking',
         description: description,
         roomNumber: b.roomNumber,
@@ -857,7 +879,14 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         serviceOrType: b.roomType || 'Room Check-in',
         amount: b.amountPaid || b.totalPrice || 0,
         paymentMethod: b.paymentMethod || 'Cash',
-        timestamp: b.createdAt || b.checkInDate || handover.timestamp
+        timestamp: b.createdAt || b.checkInDate || handover.timestamp,
+        isFutureBooking: isFuture,
+        isPartialDeposit: isPartial,
+        totalStayCost: b.totalPrice,
+        depositAmount: b.amountPaid,
+        previousDeposits: 0,
+        balanceSettled: b.paymentStatus === 'Paid',
+        paymentCategory: isFuture ? 'Future Lock-In' : 'Check-in'
       });
     });
 
@@ -1482,7 +1511,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         
         pdf.setFontSize(9);
         pdf.setTextColor(100, 116, 139);
-        pdf.text(cleanPdfText("COMBINED TOTAL REVENUE"), 18, 68);
+        pdf.text(cleanPdfText(printPreviewConfig.revenueLabel?.toUpperCase() || "COMBINED TOTAL REVENUE"), 18, 68);
         pdf.text(cleanPdfText("TOTAL BOOKINGS VOLUME"), 80, 68);
         pdf.text(cleanPdfText("REPORTING SCOPE STATUS"), 140, 68);
 
@@ -5959,6 +5988,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                             }
                             return 0;
                           };
+
                           const totalRevenue = filtered.reduce((sum, b) => sum + calculatePaid(b), 0);
                           const annexBookings = filtered.filter(b => b.branch === 'Annex');
                           const ayigyaBookings = filtered.filter(b => b.branch === 'Ayigya');
@@ -5989,7 +6019,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                               col2: b.guestName,
                               col3: `Room ${b.roomNumber}`,
                               col4: `${b.checkInDate && typeof b.checkInDate === 'string' ? b.checkInDate.substring(0, 10) : 'N/A'} to ${b.checkOutDate && typeof b.checkOutDate === 'string' ? b.checkOutDate.substring(0, 10) : 'N/A'}`,
-                              col5: `GH₵ ${b.totalPrice.toFixed(2)}`,
+                              col5: `GH₵ ${calculatePaid(b).toFixed(2)}`,
                               col6: b.receptionistName || 'N/A',
                               col7: `${b.status} (${b.paymentStatus})`
                             })),
@@ -6002,7 +6032,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                       </button>
                       <button 
                         onClick={() => {
-                          const headers = ['Lodge/Ref', 'Guest Name', 'Email', 'Phone', 'Room', 'In', 'Out', 'Total Price', 'Paid', 'Status', 'Payment', 'Operator'];
+                          const headers = ['Lodge/Ref', 'Guest Name', 'Email', 'Phone', 'Room', 'In', 'Out', 'Total Price', 'Paid', 'Status', 'Payment Status', 'Operator'];
                           const rows = bookings.map(b => [
                             `${b.branch} / ${b.id}`,
                             b.guestName,
@@ -6017,7 +6047,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                             b.paymentStatus,
                             b.receptionistName || 'N/A'
                           ]);
-                          let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\\n" + rows.map(e => e.map(cell => `"${cell}"`).join(",")).join("\\n");
+                          let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.map(cell => `"${cell}"`).join(",")).join("\n");
                           const encodedUri = encodeURI(csvContent);
                           const link = document.createElement("a");
                           link.setAttribute("href", encodedUri);
@@ -6052,13 +6082,9 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                       <tbody className="divide-y divide-zinc-850/40 text-xs">
                         {(() => {
                           const filtered = bookings.filter(b => {
-                            // Branch filter
                             if (bookingBranchFilter !== 'All' && b.branch !== bookingBranchFilter) return false;
-                            // Status filter
                             if (bookingStatusFilter !== 'All' && b.status !== bookingStatusFilter) return false;
-                            // Payment filter
                             if (bookingPaymentFilter !== 'All' && b.paymentStatus !== bookingPaymentFilter) return false;
-                            // Date range filter
                             if (bookingStartDate) {
                               const bEnd = b.checkOutDate && typeof b.checkOutDate === 'string' ? b.checkOutDate.substring(0, 10) : '';
                               if (bEnd < bookingStartDate) return false;
@@ -6067,7 +6093,6 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                               const bStart = b.checkInDate && typeof b.checkInDate === 'string' ? b.checkInDate.substring(0, 10) : '';
                               if (bStart > bookingEndDate) return false;
                             }
-                            // Search query
                             if (bookingSearchQuery.trim() !== '') {
                               const q = bookingSearchQuery.toLowerCase();
                               const idStr = String(b.id || '').toLowerCase();
@@ -6107,6 +6132,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                           return filtered.map((b, idx) => {
                             const isPaid = b.paymentStatus === 'Paid';
                             const isPartial = b.paymentStatus === 'Partial' || b.paymentStatus?.includes('Partial');
+                            const paidAmount = isPaid ? b.totalPrice : (isPartial ? (b.deposit || b.amountPaid || b.totalPrice * 0.5) : 0);
 
                             return (
                               <tr key={`${b.id}-${idx}`} className={`hover:bg-zinc-800/10 transition-colors ${
@@ -6146,7 +6172,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                 <td className="py-3.5 px-4 font-mono font-bold text-sm">
                                   <div className="flex flex-col">
                                     <span>GH₵{b.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                                    <span className="text-[10px] text-zinc-500 font-normal">Paid: GH₵{(b.paymentStatus === 'Paid' ? b.totalPrice : ((b.paymentStatus === 'Partial' || b.paymentStatus?.startsWith('Partially')) ? (b.deposit || b.amountPaid || b.totalPrice * 0.5) : 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                    <span className="text-[10px] text-zinc-500 font-normal">Paid: GH₵{paidAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                                   </div>
                                 </td>
                                 <td className="py-3.5 px-4">
@@ -8281,7 +8307,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                     {/* Metadata summary cards row */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div className="p-2.5 bg-blue-50 border border-blue-100 rounded-lg">
-                        <span className="text-[9px] text-blue-600 uppercase font-bold tracking-wider font-mono block">Combined Revenue</span>
+                        <span className="text-[9px] text-blue-600 uppercase font-bold tracking-wider font-mono block">{printPreviewConfig.revenueLabel || 'Combined Revenue'}</span>
                         <strong className="text-sm text-blue-900 font-extrabold font-mono">
                           GH₵ {printPreviewConfig.totalRevenue?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
                         </strong>
@@ -8894,16 +8920,74 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                   <td className={`py-2 px-2 font-medium ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
                                     {(() => {
                                       const details = getAuditItemDetails(item.description);
+                                      const category = item.paymentCategory || (item.isFutureBooking ? 'Future Lock-In' : (item.serviceOrType === 'Check-in Balance Settlement' ? 'Balance Settlement' : 'Check-in'));
+                                      
                                       return (
-                                        <div className="flex flex-col gap-0.5">
-                                          <span className="break-words">{details.cleanDescription}</span>
-                                          {isFuture && (
-                                            <span className={`text-[11px] font-semibold mt-0.5 ${
-                                              isDarkMode ? 'text-purple-400' : 'text-purple-700'
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {category && (
+                                              <span className={`text-[8px] uppercase font-black px-1 py-0.5 rounded leading-none ${
+                                                category === 'Check-in' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                                category === 'Balance Settlement' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                                                category === 'Future Lock-In' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                                                'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
+                                              }`}>
+                                                {category}
+                                              </span>
+                                            )}
+                                            <span className="break-words">{details.cleanDescription}</span>
+                                          </div>
+
+                                          {/* Detailed Financial Breakdown for Room Transactions */}
+                                          {item.type === 'Room Booking' && (
+                                            <div className={`mt-1 p-1.5 rounded-lg border flex flex-col gap-1 text-[10px] ${
+                                              isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-200'
                                             }`}>
-                                              ({isPartial ? 'Partial' : 'Full'} Deposit Paid: GH₵ {Number(item.amount || 0).toFixed(2)})
-                                            </span>
+                                              <div className="flex justify-between items-center">
+                                                <span className="text-zinc-500 uppercase font-mono tracking-tighter">Total Cost:</span>
+                                                <span className="font-bold">GH₵ {(item.totalStayCost || 0).toFixed(2)}</span>
+                                              </div>
+                                              
+                                              {category === 'Balance Settlement' ? (
+                                                <>
+                                                  <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-500 uppercase font-mono tracking-tighter">Previous Deposits:</span>
+                                                    <span className="font-bold">GH₵ {(item.previousDeposits || 0).toFixed(2)}</span>
+                                                  </div>
+                                                  <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-500 uppercase font-mono tracking-tighter">Settlement:</span>
+                                                    <span className="text-emerald-500 font-black">GH₵ {item.amount.toFixed(2)}</span>
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <div className="flex justify-between items-center">
+                                                  <span className="text-zinc-500 uppercase font-mono tracking-tighter">Deposit:</span>
+                                                  <span className="text-blue-500 font-black">GH₵ {item.amount.toFixed(2)}</span>
+                                                </div>
+                                              )}
+
+                                              {category === 'Future Lock-In' && (
+                                                <div className="mt-1 pt-1 border-t border-slate-700/30 flex items-center gap-1 text-amber-500 font-bold italic uppercase text-[9px]">
+                                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                  Pending Guest Report
+                                                </div>
+                                              )}
+                                              
+                                              {!item.balanceSettled && category !== 'Future Lock-In' && (item.totalStayCost || 0) > ((item.previousDeposits || 0) + item.amount) && (
+                                                <div className="flex justify-between items-center pt-1 border-t border-slate-700/30">
+                                                  <span className="text-zinc-500 uppercase font-mono tracking-tighter">Remaining:</span>
+                                                  <span className="text-rose-500 font-bold">GH₵ {((item.totalStayCost || 0) - ((item.previousDeposits || 0) + item.amount)).toFixed(2)}</span>
+                                                </div>
+                                              )}
+                                              
+                                              {item.balanceSettled && (
+                                                <div className="mt-1 pt-1 border-t border-emerald-500/30 text-emerald-500 font-bold uppercase text-[9px] text-center">
+                                                  Account Fully Settled
+                                                </div>
+                                              )}
+                                            </div>
                                           )}
+
                                           {!isFuture && details.badge && (
                                             <span className={`w-fit px-1.5 py-0.5 rounded text-[9px] font-bold ${details.badgeColor}`}>
                                               {details.badge}
@@ -8962,7 +9046,63 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                  {details.cleanDescription || item.serviceOrType || 'Audit Entry'}
                                </div>
                             </div>
-                            {isFuture ? (
+
+                            {item.type === 'Room Booking' && (
+                              <div className={`mb-2 p-2 rounded-lg border flex flex-col gap-1.5 text-[10px] ${
+                                isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-zinc-500 uppercase font-mono tracking-tighter">Total Cost:</span>
+                                  <span className="font-bold">GH₵ {(item.totalStayCost || 0).toFixed(2)}</span>
+                                </div>
+                                
+                                {(() => {
+                                  const category = item.paymentCategory || (item.isFutureBooking ? 'Future Lock-In' : (item.serviceOrType === 'Check-in Balance Settlement' ? 'Balance Settlement' : 'Check-in'));
+                                  if (category === 'Balance Settlement') {
+                                    return (
+                                      <>
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-zinc-500 uppercase font-mono tracking-tighter">Prev. Deposits:</span>
+                                          <span className="font-bold">GH₵ {(item.previousDeposits || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-zinc-500 uppercase font-mono tracking-tighter">Settlement:</span>
+                                          <span className="text-emerald-500 font-black">GH₵ {item.amount.toFixed(2)}</span>
+                                        </div>
+                                      </>
+                                    );
+                                  }
+                                  return (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-zinc-500 uppercase font-mono tracking-tighter">Deposit:</span>
+                                      <span className="text-blue-500 font-black">GH₵ {item.amount.toFixed(2)}</span>
+                                    </div>
+                                  );
+                                })()}
+
+                                {item.isFutureBooking && (
+                                  <div className="mt-1 pt-1 border-t border-slate-700/30 flex items-center gap-1 text-amber-500 font-bold italic uppercase text-[9px]">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    Pending Guest Report
+                                  </div>
+                                )}
+                                
+                                {!item.balanceSettled && !item.isFutureBooking && (item.totalStayCost || 0) > ((item.previousDeposits || 0) + item.amount) && (
+                                  <div className="flex justify-between items-center pt-1 border-t border-slate-700/30">
+                                    <span className="text-zinc-500 uppercase font-mono tracking-tighter">Remaining:</span>
+                                    <span className="text-rose-500 font-bold">GH₵ {((item.totalStayCost || 0) - ((item.previousDeposits || 0) + item.amount)).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                
+                                {item.balanceSettled && (
+                                  <div className="mt-1 pt-1 border-t border-emerald-500/30 text-emerald-500 font-bold uppercase text-[9px] text-center">
+                                    Account Fully Settled
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {item.type !== 'Room Booking' && isFuture ? (
                               <div className={`text-[11px] font-semibold mb-1 ${
                                 isDarkMode ? 'text-purple-400' : 'text-purple-700'
                               }`}>
@@ -8970,7 +9110,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                               </div>
                             ) : null}
                             
-                            {isFuture ? (
+                            {item.type !== 'Room Booking' && (isFuture ? (
                               <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-extrabold mb-2 ${
                                 isDarkMode 
                                   ? 'bg-purple-950 text-purple-300 border border-purple-700/60' 
@@ -8982,7 +9122,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                               <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mb-2 ${details.badgeColor}`}>
                                   {details.badge}
                               </span>
-                            ) : null}
+                            ) : null)}
 
                             <div className="flex justify-between items-center text-[11px]">
                               <span className={`font-medium truncate pr-2 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>{item.guestName || '—'}</span>

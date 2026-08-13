@@ -461,8 +461,13 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
   const dynamicRooms = useMemo(() => {
     return rooms.map(r => {
-      const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && b.branch === branch && (b.status === 'CheckedIn' || b.status === 'checked_in'));
-      return { ...r, status: isOccupied ? 'Occupied' : r.status };
+      const activeBooking = bookings.find(b => 
+        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
+        (b.status === 'CheckedIn' || b.status === 'checked_in') && 
+        (b.branch === r.branch || !b.branch || b.branch === branch)
+      );
+      const isOccupied = !!activeBooking;
+      return { ...r, status: isOccupied ? 'Occupied' : (r.status === 'Occupied' ? 'Available' : r.status) };
     });
   }, [rooms, bookings, branch]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -2462,6 +2467,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     paymentMethod?: string;
     isFutureBooking?: boolean;
     isPartialDeposit?: boolean;
+    totalStayCost?: number;
+    previousDeposits?: number;
   }) => {
     try {
       if (!data.amount || Number(data.amount) <= 0) {
@@ -2485,6 +2492,8 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         paymentMethod: data.paymentMethod || 'Cash',
         isFutureBooking: !!data.isFutureBooking,
         isPartialDeposit: !!data.isPartialDeposit,
+        totalStayCost: data.totalStayCost,
+        previousDeposits: data.previousDeposits,
         timestamp: getFormattedDateTime(),
         dateCreated: new Date().toISOString()
       };
@@ -2709,7 +2718,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           receptionistId: currentUser.id,
           receptionistName: currentUser.name,
           revenueType: paymentStatus === 'Paid' ? 'Allocation' : 'Deposit',
-          paymentMethod: bookingPaymentMethod
+          paymentMethod: bookingPaymentMethod,
+          totalStayCost: totalRate,
+          previousDeposits: 0,
+          isFutureBooking: new Date(checkInDate) > new Date()
         }));
       }
 
@@ -3745,8 +3757,15 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       alert(`Room ${room.roomNumber} belongs to ${room.branch || (branch === 'Annex' ? 'Ayigya' : 'Annex')} branch and is view-only. You cannot change room status across branches.`);
       return;
     }
-    if (room.status === 'Occupied' && newStatus !== 'Occupied') {
-      alert('Cannot change status of occupied room. Please complete guest check-out first.');
+
+    const activeBooking = bookings.find(b => 
+      (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
+      (b.status === 'CheckedIn' || b.status === 'checked_in') && 
+      (b.branch === room.branch || !b.branch || b.branch === branch)
+    );
+
+    if (activeBooking && newStatus !== 'Occupied') {
+      alert('Cannot change status of occupied room with an active guest. Please complete guest check-out first.');
       return;
     }
 
@@ -3864,10 +3883,12 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
   const getRoomEffectiveStatus = (room: Room): RoomStatus => {
     const activeBooking = bookings.find(b => 
       (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-      b.status === 'CheckedIn' && 
+      (b.status === 'CheckedIn' || b.status === 'checked_in') && 
       (b.branch === room.branch || !b.branch || b.branch === branch)
     );
     if (activeBooking) return 'Occupied';
+    // If it's marked as Occupied but no active booking exists, it's actually Available (or whatever status it was supposed to be)
+    if (room.status === 'Occupied') return 'Available';
     return room.status;
   };
 
@@ -4094,6 +4115,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
         return {
           id: r.id || `room_rev_${Math.random().toString(36).substring(2, 7)}`,
+          bookingId: r.bookingId,
           type: 'Room Booking' as const,
           description: description,
           roomNumber: r.roomNumber || '',
@@ -4103,7 +4125,12 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
           paymentMethod: r.paymentMethod || r.paymentMode || 'Cash',
           timestamp: r.timestamp || r.date || r.createdAt || getFormattedDateTime(),
           isFutureBooking: isFuture,
-          isPartialDeposit: isPartial
+          isPartialDeposit: isPartial,
+          totalStayCost: r.totalStayCost || total,
+          depositAmount: r.depositAmount || paid,
+          previousDeposits: r.previousDeposits || 0,
+          balanceSettled: r.revenueType === 'CheckInBalance' || r.revenueType === 'CheckoutBalance' || (paid > 0 && total > 0 && paid >= total),
+          paymentCategory: isFuture ? 'Future Lock-In' : (r.revenueType === 'CheckInBalance' || r.revenueType === 'CheckoutBalance' ? 'Balance Settlement' : 'Check-in')
         };
       }),
       ...stats.activeWalkIns.map((w: any) => ({
