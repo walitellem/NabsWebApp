@@ -470,13 +470,30 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
   const [pendingEditsFilter, setPendingEditsFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
   const [rejectionInputId, setRejectionInputId] = useState<string | null>(null);
   const [rejectionReasonText, setRejectionReasonText] = useState<string>('');
+  const [processingEditRequestId, setProcessingEditRequestId] = useState<string | null>(null);
 
   const handleApproveEditRequest = async (req: PendingEditRequest) => {
+    if (processingEditRequestId) return;
+    setProcessingEditRequestId(req.id);
     try {
       const booking = bookings.find(b => b.id === req.bookingId);
       if (!booking) {
         addToast("Booking Not Found", "error", "The associated booking for this request could not be found.");
         return;
+      }
+
+      const totalPrice = req.proposedTotalPrice || booking.totalPrice;
+      const amountPaid = req.proposedAmountPaid !== undefined ? req.proposedAmountPaid : (booking.amountPaid || 0);
+      let effectivePaymentStatus = req.proposedPaymentStatus || booking.paymentStatus || 'Unpaid';
+
+      if (amountPaid < totalPrice && amountPaid > 0) {
+        if (effectivePaymentStatus === 'Paid') {
+          effectivePaymentStatus = (req.proposedPaymentMethod?.includes('Split') || effectivePaymentStatus === 'Partially Paid (Split)') ? 'Partially Paid (Split)' : 'Partial';
+        }
+      } else if (amountPaid >= totalPrice && totalPrice > 0) {
+        effectivePaymentStatus = 'Paid';
+      } else if (amountPaid === 0) {
+        effectivePaymentStatus = 'Unpaid';
       }
 
       const updatedBookingFields: Partial<Booking> = {
@@ -485,7 +502,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         checkInDate: req.proposedCheckInDate,
         checkOutDate: req.proposedCheckOutDate,
         totalPrice: req.proposedTotalPrice,
-        ...(req.proposedPaymentStatus && { paymentStatus: req.proposedPaymentStatus }),
+        paymentStatus: effectivePaymentStatus,
         ...(req.proposedAmountPaid !== undefined && { 
           amountPaid: req.proposedAmountPaid,
           deposit: req.proposedAmountPaid,
@@ -493,6 +510,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
           pending_payment: Math.max(0, req.proposedTotalPrice - req.proposedAmountPaid)
         }),
         ...(req.proposedPaymentMethod && { paymentMethod: req.proposedPaymentMethod }),
+        ...(req.splitCashAmount !== undefined && { splitCashAmount: req.splitCashAmount }),
+        ...(req.splitMomoAmount !== undefined && { splitMomoAmount: req.splitMomoAmount }),
       };
 
       if (req.guestName) updatedBookingFields.guestName = req.guestName;
@@ -515,6 +534,9 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
           const hasAmountChange = req.proposedAmountPaid !== undefined && 
             (req.proposedAmountPaid !== req.currentAmountPaid || req.proposedAmountPaid !== totalCurrentRev);
           
+          const revSplitCash = req.splitCashAmount !== undefined ? req.splitCashAmount : ((booking as any).splitCashAmount || 0);
+          const revSplitMomo = req.splitMomoAmount !== undefined ? req.splitMomoAmount : ((booking as any).splitMomoAmount || 0);
+
           if (hasPaymentMethodChange || hasAmountChange) {
             const proposedAmt = req.proposedAmountPaid !== undefined ? req.proposedAmountPaid : totalCurrentRev;
             const amtDiff = proposedAmt - totalCurrentRev;
@@ -525,7 +547,11 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                 if (hasPaymentMethodChange) {
                   for (const rev of matchingRevs) {
                     if (rev.id) {
-                      await safeUpdateDoc(doc(db, 'RoomRevenue', rev.id), { paymentMethod: req.proposedPaymentMethod });
+                      await safeUpdateDoc(doc(db, 'RoomRevenue', rev.id), { 
+                        paymentMethod: req.proposedPaymentMethod,
+                        splitCashAmount: req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitCash : 0,
+                        splitMomoAmount: req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitMomo : 0
+                      });
                     }
                   }
                 }
@@ -545,6 +571,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                   revenueType: 'BalanceSettlement',
                   revenueSubType: '',
                   paymentMethod: req.proposedPaymentMethod || booking.paymentMethod || 'Cash',
+                  splitCashAmount: (req.proposedPaymentMethod || booking.paymentMethod) === 'Split (Cash + Momo)' ? revSplitCash : 0,
+                  splitMomoAmount: (req.proposedPaymentMethod || booking.paymentMethod) === 'Split (Cash + Momo)' ? revSplitMomo : 0,
                   isFutureBooking: false,
                   isPartialDeposit: false,
                   timestamp: getFormattedDateTime(),
@@ -575,7 +603,11 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                    
                    const updateData: any = {};
                    if (newAmount !== currentRevAmount) updateData.amount = newAmount;
-                   if (hasPaymentMethodChange) updateData.paymentMethod = req.proposedPaymentMethod;
+                   if (hasPaymentMethodChange) {
+                     updateData.paymentMethod = req.proposedPaymentMethod;
+                     updateData.splitCashAmount = req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitCash : 0;
+                     updateData.splitMomoAmount = req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitMomo : 0;
+                   }
                    
                    if (Object.keys(updateData).length > 0 && rev.id) {
                      await safeUpdateDoc(doc(db, 'RoomRevenue', rev.id), updateData);
@@ -585,7 +617,11 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
             } else if (hasPaymentMethodChange) {
               for (const rev of matchingRevs) {
                 if (rev.id) {
-                  await safeUpdateDoc(doc(db, 'RoomRevenue', rev.id), { paymentMethod: req.proposedPaymentMethod });
+                  await safeUpdateDoc(doc(db, 'RoomRevenue', rev.id), { 
+                    paymentMethod: req.proposedPaymentMethod,
+                    splitCashAmount: req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitCash : 0,
+                    splitMomoAmount: req.proposedPaymentMethod === 'Split (Cash + Momo)' ? revSplitMomo : 0
+                  });
                 }
               }
             }
@@ -687,17 +723,19 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       if (req.currentRoomId !== req.proposedRoomId) {
         const oldRoom = rooms.find(r => r.id === req.currentRoomId);
         const newRoom = rooms.find(r => r.id === req.proposedRoomId);
+        const targetBooking = bookings.find(b => b.id === req.bookingId);
+        const isCurrentlyCheckedIn = targetBooking ? (targetBooking.status === 'CheckedIn' || (targetBooking.status as string) === 'checked_in') : false;
 
         if (oldRoom && db) {
           await safeUpdateDoc(doc(db, 'rooms', oldRoom.id), { status: 'Available' });
         }
         if (newRoom && db) {
-          await safeUpdateDoc(doc(db, 'rooms', newRoom.id), { status: 'Occupied' });
+          await safeUpdateDoc(doc(db, 'rooms', newRoom.id), { status: isCurrentlyCheckedIn ? 'Occupied' : 'Available' });
         }
 
         const updatedRooms = rooms.map(r => {
           if (r.id === req.currentRoomId) return { ...r, status: 'Available' as RoomStatus };
-          if (r.id === req.proposedRoomId) return { ...r, status: 'Occupied' as RoomStatus };
+          if (r.id === req.proposedRoomId) return { ...r, status: (isCurrentlyCheckedIn ? 'Occupied' : 'Available') as RoomStatus };
           return r;
         });
         setRooms(updatedRooms);
@@ -748,10 +786,14 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     } catch (err: any) {
       console.error("Error approving edit request:", err);
       addToast("Approval Error", "error", err.message || "Could not approve request.", 4000);
+    } finally {
+      setProcessingEditRequestId(null);
     }
   };
 
   const handleRejectEditRequest = async (req: PendingEditRequest) => {
+    if (processingEditRequestId) return;
+    setProcessingEditRequestId(req.id);
     try {
       const reviewedAt = new Date().toISOString();
       const reason = rejectionReasonText.trim() || 'Rejected by manager';
@@ -794,6 +836,8 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     } catch (err: any) {
       console.error("Error rejecting edit request:", err);
       addToast("Rejection Error", "error", err.message || "Could not reject request.", 4000);
+    } finally {
+      setProcessingEditRequestId(null);
     }
   };
   
@@ -1228,7 +1272,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       if (b.status === 'Cancelled') return;
       const bRevenues = roomRevenue.filter(r => r.bookingId === b.id);
       const extRevsSum = bRevenues.filter(r => r.revenueType === 'ExtensionFee').reduce((sum, r) => sum + Number(r.amount || 0), 0);
-      const roomRevsSum = bRevenues.filter(r => r.revenueType !== 'ExtensionFee').reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      const roomRevsSum = bRevenues.filter(r => r.revenueType !== 'ExtensionFee' && r.revenueType !== 'DrinkSettlement').reduce((sum, r) => sum + Number(r.amount || 0), 0);
       
       const expectedExt = Number(b.lateCheckOutFeeApplied || 0);
       if (expectedExt > extRevsSum) {
@@ -1254,14 +1298,16 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       expectedRoom = Math.max(0, expectedRoom - expectedExt);
 
       if (expectedRoom > roomRevsSum) {
+        const isCheckedOut = b.status === 'CheckedOut' || b.status === 'checked_out';
+        const fallbackTs = (isCheckedOut && b.actualCheckOutDate) ? b.actualCheckOutDate : (b.createdAt || b.dateCreated || b.checkInDate);
         legacyBookings.push({ 
           bookingId: b.id, 
-          timestamp: b.createdAt || b.dateCreated || b.checkInDate, 
+          timestamp: fallbackTs, 
           amountVal: expectedRoom - roomRevsSum, 
           branch: b.branch, 
           lodgeBranch: b.branch,
           roomType: b.roomType,
-          revenueType: 'RoomPayment'
+          revenueType: isCheckedOut ? 'CheckoutBalance' : 'RoomPayment'
         });
       }
     });
@@ -1357,6 +1403,25 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       return matchesYear && matchesMonth;
     });
   };
+
+  // Real-time ground truth auto-healing effect for room status in Firestore & state
+  useEffect(() => {
+    if (!rooms || rooms.length === 0 || !bookings) return;
+    
+    rooms.forEach(r => {
+      const hasActiveCheckedIn = bookings.some(b => 
+        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
+        (b.branch === r.branch || !b.branch) && 
+        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+      );
+
+      if (hasActiveCheckedIn && r.status !== 'Occupied') {
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
+      } else if (!hasActiveCheckedIn && r.status === 'Occupied') {
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available' }, { merge: true }).catch(() => {});
+      }
+    });
+  }, [rooms, bookings]);
 
   useEffect(() => {
     // 1. Calculate Annual Revenue Trend
@@ -3044,15 +3109,13 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     const revenue = baseLodgingRevenue + extensionRevenue + activityRevenue + barRevenue;
 
     const totalRmsCount = branchRooms.length;
-    const occupiedCount = branchRooms.filter(r => {
-      const isStatusOccupied = r.status === 'Occupied' || !!r.guestName;
-      const hasActiveBooking = bookings.some(b => 
+    const occupiedCount = branchRooms.filter(r => 
+      bookings.some(b => 
         (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && 
         (b.branch === branch || !b.branch) && 
-        (b.status === 'CheckedIn' || b.status === 'checked_in')
-      );
-      return isStatusOccupied || hasActiveBooking;
-    }).length;
+        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+      )
+    ).length;
     const maintenanceCount = branchRooms.filter(r => r.status === 'Maintenance').length;
     const occupancyRate = totalRmsCount > 0 ? (occupiedCount / totalRmsCount) * 100 : 0;
 
@@ -3112,16 +3175,16 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     };
 
     const isCashMethod = (method?: string) => {
-      if (!method) return true;
+      if (!method) return false;
       const m = method.toLowerCase();
-      if (m.includes('unpaid')) return false;
+      if (m.includes('unpaid') || m.includes('split')) return false;
       return m.includes('cash') || (!m.includes('mobile') && !m.includes('momo') && !m.includes('bank') && !m.includes('pos'));
     };
 
     const isMomoMethod = (method?: string) => {
       if (!method) return false;
       const m = method.toLowerCase();
-      if (m.includes('unpaid')) return false;
+      if (m.includes('unpaid') || m.includes('split')) return false;
       return m.includes('mobile') || m.includes('momo') || m.includes('money');
     };
 
@@ -3129,15 +3192,68 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     const activeWalkIns = activityTransactions.filter(isRecordInActiveShift);
 
     const walkInTotal = activeWalkIns.reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
-    const walkInCash = activeWalkIns.filter(t => isCashMethod(t.paymentMethod)).reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
-    const walkInMomo = activeWalkIns.filter(t => isMomoMethod(t.paymentMethod)).reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
+    let walkInCash = 0;
+    let walkInMomo = 0;
+    activeWalkIns.forEach(t => {
+      const amt = Number(t.amountPaid || t.totalPrice || 0);
+      const m = (t.paymentMethod || '').toLowerCase();
+      if (m.includes('split')) {
+        const c = Number((t as any).splitCashAmount);
+        const mo = Number((t as any).splitMomoAmount);
+        if (c > 0 || mo > 0) {
+          walkInCash += c;
+          walkInMomo += mo;
+        } else {
+          walkInCash += amt / 2;
+          walkInMomo += amt / 2;
+        }
+      } else if (isMomoMethod(t.paymentMethod)) {
+        walkInMomo += amt;
+      } else {
+        walkInCash += amt;
+      }
+    });
 
     // 2. Room revenue payments (excluding settled drinks)
     const activeRoomRevs = roomRevenue.filter(r => isRecordInActiveShift(r) && r.revenueType !== 'DrinkSettlement');
 
     const roomTotal = activeRoomRevs.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    const roomCash = activeRoomRevs.filter(r => isCashMethod(r.paymentMethod || r.paymentMode)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    const roomMomo = activeRoomRevs.filter(r => isMomoMethod(r.paymentMethod || r.paymentMode)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+    let roomCash = 0;
+    let roomMomo = 0;
+    activeRoomRevs.forEach(r => {
+      const amt = Number(r.amount || 0);
+      const methodStr = r.paymentMethod || r.paymentMode || 'Cash';
+      const m = methodStr.toLowerCase();
+      if (m.includes('split')) {
+        const c = Number((r as any).splitCashAmount);
+        const mo = Number((r as any).splitMomoAmount);
+        if (c > 0 || mo > 0) {
+          roomCash += c;
+          roomMomo += mo;
+        } else {
+          const assocBooking = bookings.find(b => b.id === r.bookingId);
+          const bCash = Number((assocBooking as any)?.splitCashAmount);
+          const bMomo = Number((assocBooking as any)?.splitMomoAmount);
+          if (bCash > 0 || bMomo > 0) {
+            const bTotal = bCash + bMomo;
+            if (bTotal > 0 && Math.abs(bTotal - amt) > 0.01) {
+              roomCash += (bCash / bTotal) * amt;
+              roomMomo += (bMomo / bTotal) * amt;
+            } else {
+              roomCash += bCash;
+              roomMomo += bMomo;
+            }
+          } else {
+            roomCash += amt / 2;
+            roomMomo += amt / 2;
+          }
+        }
+      } else if (isMomoMethod(methodStr)) {
+        roomMomo += amt;
+      } else {
+        roomCash += amt;
+      }
+    });
 
     // 3. Drink sales
     const activeDrinkSales = drinkSales.filter(isRecordInActiveShift);
@@ -6527,14 +6643,16 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                     }`}
                                   />
                                   <button
+                                    disabled={!!processingEditRequestId}
                                     onClick={() => handleRejectEditRequest(req)}
-                                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl cursor-pointer"
+                                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    Confirm Reject
+                                    {processingEditRequestId === req.id ? 'Rejecting...' : 'Confirm Reject'}
                                   </button>
                                   <button
+                                    disabled={!!processingEditRequestId}
                                     onClick={() => { setRejectionInputId(null); setRejectionReasonText(''); }}
-                                    className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                                    className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Cancel
                                   </button>
@@ -6542,16 +6660,26 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                               ) : (
                                 <>
                                   <button
+                                    disabled={!!processingEditRequestId}
                                     onClick={() => setRejectionInputId(req.id)}
-                                    className="px-4 py-2 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                                    className="px-4 py-2 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white font-bold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Reject Request
                                   </button>
                                   <button
+                                    disabled={!!processingEditRequestId}
                                     onClick={() => handleApproveEditRequest(req)}
-                                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1.5"
+                                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    <CheckCircle className="w-4 h-4" /> Approve & Apply Edit
+                                    {processingEditRequestId === req.id ? (
+                                      <>
+                                        <RefreshCw className="w-4 h-4 animate-spin" /> Approving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="w-4 h-4" /> Approve & Apply Edit
+                                      </>
+                                    )}
                                   </button>
                                 </>
                               )}
@@ -6697,12 +6825,13 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                 {/* Live Summary Stat Cards */}
                 {(() => {
                   const getLiveEffectiveStatus = (r: Room): RoomStatus => {
-                    const isOccupied = r.status === 'Occupied' || !!r.guestName || bookings.some(b => 
+                    const hasActiveCheckedIn = bookings.some(b => 
                       (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && 
                       (b.branch === r.branch || !b.branch) && 
                       (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
                     );
-                    if (isOccupied) return 'Occupied';
+                    if (hasActiveCheckedIn) return 'Occupied';
+                    if (r.status === 'Occupied') return 'Available';
                     return r.status || 'Available';
                   };
 
@@ -6851,26 +6980,27 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                         Nabslodge {branchName}
                                       </h3>
                                       <span className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-full ${isDarkMode ? 'bg-zinc-800 text-zinc-300' : 'bg-slate-200 text-slate-700'}`}>
-                                        {branchRooms.filter(r => r.status === 'Available').length} Available / {branchRooms.length} Total
+                                        {branchRooms.filter(r => getLiveEffectiveStatus(r) === 'Available').length} Available / {branchRooms.length} Total
                                       </span>
                                     </div>
                                   </div>
 
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {branchRooms.map(room => {
-                                      const activeBooking = room.status === 'Occupied' 
-                                        ? bookings.find(b => (b.roomId === room.id || b.roomNumber === room.roomNumber) && b.branch === room.branch && b.status === 'CheckedIn')
+                                      const effectiveStatus = getLiveEffectiveStatus(room);
+                                      const activeBooking = effectiveStatus === 'Occupied' 
+                                        ? bookings.find(b => (b.roomId === room.id || String(b.roomNumber) === String(room.roomNumber)) && (b.branch === room.branch || !b.branch) && (b.status === 'CheckedIn' || (b.status as string) === 'checked_in'))
                                         : null;
 
                                       return (
                                         <div
                                           key={room.id}
                                           className={`p-4 rounded-2xl border transition-all duration-200 hover:shadow-lg relative flex flex-col justify-between ${
-                                            room.status === 'Available'
+                                            effectiveStatus === 'Available'
                                               ? (isDarkMode ? 'bg-zinc-900/90 border-emerald-500/40 hover:border-emerald-500' : 'bg-white border-emerald-300 hover:border-emerald-500')
-                                              : room.status === 'Occupied'
+                                              : effectiveStatus === 'Occupied'
                                               ? (isDarkMode ? 'bg-zinc-900/90 border-blue-500/30' : 'bg-white border-blue-200')
-                                              : room.status === 'Cleaning'
+                                              : effectiveStatus === 'Cleaning'
                                               ? (isDarkMode ? 'bg-zinc-900/90 border-amber-500/30' : 'bg-white border-amber-200')
                                               : (isDarkMode ? 'bg-zinc-900/90 border-red-500/30' : 'bg-white border-red-200')
                                           }`}
@@ -6886,15 +7016,15 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                                 </h4>
                                               </div>
                                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                                room.status === 'Available'
+                                                effectiveStatus === 'Available'
                                                   ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
-                                                  : room.status === 'Occupied'
+                                                  : effectiveStatus === 'Occupied'
                                                   ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30'
-                                                  : room.status === 'Cleaning'
+                                                  : effectiveStatus === 'Cleaning'
                                                   ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
                                                   : 'bg-red-500/15 text-red-500 border border-red-500/30'
                                               }`}>
-                                                {room.status}
+                                                {effectiveStatus}
                                               </span>
                                             </div>
 
@@ -6909,11 +7039,36 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                               {activeBooking && (() => {
                                                 const actualPaid = getActualPaidAmount(activeBooking);
                                                 const overpaidAmount = Math.max(0, actualPaid - activeBooking.totalPrice);
+                                                const unpaidDrinks = drinkSales
+                                                  .filter(s => (s.bookingId === activeBooking.id || s.roomNumber === (activeBooking.roomNumber || room.roomNumber)) && s.paymentMethod === 'Unpaid (Add to Room Bill)')
+                                                  .reduce((sum, s) => sum + (s.totalPrice || 0), 0);
+                                                const roomBalance = Math.max(0, activeBooking.totalPrice - actualPaid);
+                                                const totalBalanceDue = roomBalance + unpaidDrinks;
                                                 return (
                                                   <div className={`p-2.5 rounded-xl text-[11px] mt-2 space-y-1.5 border ${isDarkMode ? 'bg-blue-950/40 border-blue-500/20 text-blue-300' : 'bg-blue-50 border border-blue-200 text-blue-900'}`}>
                                                     <div className="font-bold truncate">{activeBooking.guestName}</div>
                                                     <div className="text-[10px] opacity-80 flex items-center gap-1">
                                                       <Clock className="w-3.5 h-3.5" /> Check Out: {activeBooking.checkOutDate}
+                                                    </div>
+                                                    <div className="space-y-1 pt-1.5 border-t border-dashed border-blue-400/30 text-[10px]">
+                                                      <div className="flex justify-between items-center">
+                                                        <span className="opacity-75">Room Invoice:</span>
+                                                        <span className="font-mono font-bold">GH₵{activeBooking.totalPrice.toFixed(2)}</span>
+                                                      </div>
+                                                      <div className="flex justify-between items-center">
+                                                        <span className="opacity-75">Amount Settled / Paid:</span>
+                                                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">-GH₵{actualPaid.toFixed(2)}</span>
+                                                      </div>
+                                                      {unpaidDrinks > 0 && (
+                                                        <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 font-semibold">
+                                                          <span>Unpaid Drinks:</span>
+                                                          <span className="font-mono">+GH₵{unpaidDrinks.toFixed(2)}</span>
+                                                        </div>
+                                                      )}
+                                                      <div className="flex justify-between items-center font-bold pt-1 border-t border-blue-400/20">
+                                                        <span>Total Balance Due:</span>
+                                                        <span className="font-mono text-purple-600 dark:text-purple-300">GH₵{totalBalanceDue.toFixed(2)}</span>
+                                                      </div>
                                                     </div>
                                                     {overpaidAmount > 0 && (
                                                       <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-1">
@@ -6930,7 +7085,7 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                                                 );
                                               })()}
 
-                                              {room.amenities && room.amenities.length > 0 && (
+                                              {!activeBooking && (
                                                 <div className="flex flex-wrap gap-1 pt-1">
                                                   {room.amenities.slice(0, 3).map((amenity, idx) => (
                                                     <span key={idx} className={`px-1.5 py-0.5 text-[9px] rounded ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-600'}`}>

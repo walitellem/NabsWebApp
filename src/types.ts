@@ -260,6 +260,8 @@ export interface PendingEditRequest {
   proposedPaymentStatus?: PaymentStatus;
   proposedAmountPaid?: number;
   proposedPaymentMethod?: string;
+  splitCashAmount?: number;
+  splitMomoAmount?: number;
   
   // Financial impact
   priceDifference: number; // Proposed total minus current total

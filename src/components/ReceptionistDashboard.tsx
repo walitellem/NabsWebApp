@@ -170,14 +170,14 @@ function cleanPdfText(text: string | number | undefined | null): string {
 const isCashMethod = (method?: string) => {
   if (!method) return true;
   const m = method.toLowerCase();
-  if (m.includes('unpaid')) return false;
+  if (m.includes('unpaid') || m.includes('split')) return false;
   return m.includes('cash') || (!m.includes('mobile') && !m.includes('momo') && !m.includes('bank') && !m.includes('pos'));
 };
 
 const isMomoMethod = (method?: string) => {
   if (!method) return false;
   const m = method.toLowerCase();
-  if (m.includes('unpaid')) return false;
+  if (m.includes('unpaid') || m.includes('split')) return false;
   return m.includes('mobile') || m.includes('momo') || m.includes('bank') || m.includes('pos') || m.includes('transfer');
 };
 
@@ -470,6 +470,25 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       return { ...r, status: isOccupied ? 'Occupied' : (r.status === 'Occupied' ? 'Available' : r.status) };
     });
   }, [rooms, bookings, branch]);
+
+  // Real-time ground truth auto-healing effect for room status in Firestore & state
+  useEffect(() => {
+    if (!rooms || rooms.length === 0 || !bookings) return;
+    
+    rooms.forEach(r => {
+      const hasActiveCheckedIn = bookings.some(b => 
+        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
+        (b.branch === r.branch || !b.branch) && 
+        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+      );
+
+      if (hasActiveCheckedIn && r.status !== 'Occupied') {
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
+      } else if (!hasActiveCheckedIn && r.status === 'Occupied') {
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available' }, { merge: true }).catch(() => {});
+      }
+    });
+  }, [rooms, bookings]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -991,6 +1010,9 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     if (!activeBooking || !selectedRoom) return;
     setIsCheckingIn(true);
     try {
+      const priorPaid = getActualPaidAmount(activeBooking);
+      const balanceToPay = Math.max(0, activeBooking.totalPrice - priorPaid);
+
       updateBookingPayment(currentUser.id, currentUser.name, activeBooking.id, 'Paid');
       
       // Update Firestore Booking
@@ -999,6 +1021,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
         balance_due: 0,
         pending_payment: 0,
         amountPaid: activeBooking.totalPrice,
+        priorAmountPaid: priorPaid > 0 ? priorPaid : activeBooking.totalPrice,
         deposit: activeBooking.totalPrice,
         branch: branch
       }, { merge: true });
@@ -1052,7 +1075,6 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       }
 
       // Log the balance payment to RoomRevenue
-      const balanceToPay = Math.max(0, activeBooking.totalPrice - (activeBooking.amountPaid || 0));
       if (balanceToPay > 0) {
         await logRoomRevenue({
           bookingId: activeBooking.id,
@@ -2469,12 +2491,18 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     isPartialDeposit?: boolean;
     totalStayCost?: number;
     previousDeposits?: number;
+    customId?: string;
   }) => {
     try {
       if (!data.amount || Number(data.amount) <= 0) {
         return; // Zero or unpaid balance isolation: do not hit active revenue ledgers
       }
-      const revId = `rev_${Math.random().toString(36).substring(2, 11)}`;
+      const typeKey = data.revenueType.toLowerCase();
+      const revId = data.customId || (
+        data.revenueType === 'ExtensionFee' 
+          ? `rev_ext_${data.bookingId}_${Date.now()}`
+          : `rev_${typeKey}_${data.bookingId}`
+      );
       const userAssignedBranch = currentUser.assignedBranch || currentUser.branch || branch;
       const newRevDoc = {
         id: revId,
@@ -3568,6 +3596,11 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       const finalTotalPrice = roomStayTotal;
       const totalAmountCollected = roomStayTotal + unpaidDrinksTotal;
 
+      // Compute prior deposit paid and checkout room balance due BEFORE mutating the booking record
+      const priorPaidAmount = getActualPaidAmount(selectedBooking);
+      const computedPrior = priorPaidAmount > 0 ? priorPaidAmount : Math.max(0, finalTotalPrice - lateCheckOutFeeApplied);
+      const roomBalanceDue = Math.max(0, (finalTotalPrice - lateCheckOutFeeApplied) - priorPaidAmount);
+
       // 1. Update local data storage
       checkoutBooking(
         currentUser.id,
@@ -3593,8 +3626,6 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
         const userAssignedBranch = currentUser.assignedBranch || currentUser.branch || branch;
 
-        const priorPaidAmount = getActualPaidAmount(selectedBooking);
-        const computedPrior = priorPaidAmount > 0 ? priorPaidAmount : Math.max(0, finalTotalPrice - lateCheckOutFeeApplied);
         await setDoc(doc(db, 'bookings', selectedBooking.id), {
           status: 'CheckedOut',
           paymentStatus: 'Paid',
@@ -3620,8 +3651,6 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
 
         // Log checkout payment components to RoomRevenue (Excluding unpaid drink settlement so it moves directly to drink revenue)
         const rObj = rooms.find(rm => rm.id === selectedBooking.roomId);
-        const depositPaid = getActualPaidAmount(selectedBooking);
-        const roomBalanceDue = (finalTotalPrice - lateCheckOutFeeApplied) - depositPaid;
 
         if (roomBalanceDue > 0) {
           await logRoomRevenue({
@@ -3717,8 +3746,6 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
       setActiveBooking(null);
 
       // Launch final settlement invoice view showing the breakdown of the stay
-      const priorPaidAmount = getActualPaidAmount(selectedBooking);
-      const computedPrior = priorPaidAmount > 0 ? priorPaidAmount : Math.max(0, finalTotalPrice - lateCheckOutFeeApplied);
       setInvoiceBooking({
         ...selectedBooking,
         status: 'CheckedOut',
@@ -3956,16 +3983,16 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
   const getActiveShiftRevenue = () => {
 
     const isCashMethod = (method?: string) => {
-      if (!method) return true;
+      if (!method) return false;
       const m = method.toLowerCase();
-      if (m.includes('unpaid')) return false;
+      if (m.includes('unpaid') || m.includes('split')) return false;
       return m.includes('cash') || (!m.includes('mobile') && !m.includes('momo') && !m.includes('bank') && !m.includes('pos'));
     };
 
     const isMomoMethod = (method?: string) => {
       if (!method) return false;
       const m = method.toLowerCase();
-      if (m.includes('unpaid')) return false;
+      if (m.includes('unpaid') || m.includes('split')) return false;
       return m.includes('mobile') || m.includes('momo') || m.includes('money');
     };
 
@@ -3973,15 +4000,68 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
     const activeWalkIns = walkInTransactions.filter(isRecordInActiveShift);
 
     const walkInTotal = activeWalkIns.reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
-    const walkInCash = activeWalkIns.filter(t => isCashMethod(t.paymentMethod)).reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
-    const walkInMomo = activeWalkIns.filter(t => isMomoMethod(t.paymentMethod)).reduce((acc, curr) => acc + Number(curr.amountPaid || curr.totalPrice || 0), 0);
+    let walkInCash = 0;
+    let walkInMomo = 0;
+    activeWalkIns.forEach(t => {
+      const amt = Number(t.amountPaid || t.totalPrice || 0);
+      const m = (t.paymentMethod || '').toLowerCase();
+      if (m.includes('split')) {
+        const c = Number((t as any).splitCashAmount);
+        const mo = Number((t as any).splitMomoAmount);
+        if (c > 0 || mo > 0) {
+          walkInCash += c;
+          walkInMomo += mo;
+        } else {
+          walkInCash += amt / 2;
+          walkInMomo += amt / 2;
+        }
+      } else if (isMomoMethod(t.paymentMethod)) {
+        walkInMomo += amt;
+      } else {
+        walkInCash += amt;
+      }
+    });
 
     // Filter room revenues (excluding settled drinks)
     const activeRoomRevs = roomRevenues.filter(r => isRecordInActiveShift(r) && r.revenueType !== 'DrinkSettlement');
 
     const roomTotal = activeRoomRevs.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    const roomCash = activeRoomRevs.filter(r => isCashMethod(r.paymentMethod || r.paymentMode)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    const roomMomo = activeRoomRevs.filter(r => isMomoMethod(r.paymentMethod || r.paymentMode)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+    let roomCash = 0;
+    let roomMomo = 0;
+    activeRoomRevs.forEach(r => {
+      const amt = Number(r.amount || 0);
+      const methodStr = r.paymentMethod || r.paymentMode || 'Cash';
+      const m = methodStr.toLowerCase();
+      if (m.includes('split')) {
+        const c = Number((r as any).splitCashAmount);
+        const mo = Number((r as any).splitMomoAmount);
+        if (c > 0 || mo > 0) {
+          roomCash += c;
+          roomMomo += mo;
+        } else {
+          const assocBooking = bookings.find(b => b.id === r.bookingId);
+          const bCash = Number((assocBooking as any)?.splitCashAmount);
+          const bMomo = Number((assocBooking as any)?.splitMomoAmount);
+          if (bCash > 0 || bMomo > 0) {
+            const bTotal = bCash + bMomo;
+            if (bTotal > 0 && Math.abs(bTotal - amt) > 0.01) {
+              roomCash += (bCash / bTotal) * amt;
+              roomMomo += (bMomo / bTotal) * amt;
+            } else {
+              roomCash += bCash;
+              roomMomo += bMomo;
+            }
+          } else {
+            roomCash += amt / 2;
+            roomMomo += amt / 2;
+          }
+        }
+      } else if (isMomoMethod(methodStr)) {
+        roomMomo += amt;
+      } else {
+        roomCash += amt;
+      }
+    });
 
     // Filter settled drinks at checkout (DrinkSettlement) recorded during this shift by this receptionist
     const activeDrinkSettlements = roomRevenues.filter(r => isRecordInActiveShift(r) && r.revenueType === 'DrinkSettlement' && r.receptionistId === currentUser.id);
@@ -5348,6 +5428,10 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                                       <span className={isDarkMode ? 'text-zinc-500' : 'text-slate-400'}>Room Invoice:</span>
                                       <span className="font-mono font-bold">GH₵{activeBooking.totalPrice.toFixed(2)}</span>
                                     </div>
+                                    <div className="flex justify-between items-center text-[11px]">
+                                      <span className={isDarkMode ? 'text-zinc-500' : 'text-slate-400'}>Amount Settled / Paid:</span>
+                                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">-GH₵{actualPaid.toFixed(2)}</span>
+                                    </div>
                                     {unpaidDrinks > 0 && (
                                       <div className="flex justify-between items-center text-[11px] text-amber-500 font-semibold">
                                         <span>Unpaid Drinks (Room Bill):</span>
@@ -5378,16 +5462,46 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
                             </div>
                           )}
 
-                          {/* Amenities list */}
-                          {!isOccupied && room.amenities.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pt-1.5">
-                              {room.amenities.map((a, idx) => (
-                                <span key={idx} className={`text-[9px] font-semibold px-2 py-0.5 rounded border ${
-                                  isDarkMode ? 'bg-zinc-950 text-emerald-500 border-emerald-900/30' : 'bg-white text-emerald-600 border-emerald-200'
-                                }`}>
-                                  {a}
+                          {/* Room Specs & Readiness for Non-Occupied */}
+                          {!isOccupied && (
+                            <div className={`p-3.5 rounded-xl text-xs space-y-2.5 my-1 border transition-colors shadow-sm ${
+                              effectiveStatus === 'Available'
+                                ? (isDarkMode ? 'bg-zinc-950/80 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50/60 border-emerald-200 text-emerald-950')
+                                : effectiveStatus === 'Cleaning'
+                                ? (isDarkMode ? 'bg-zinc-950/80 border-amber-500/30 text-amber-300' : 'bg-amber-50/60 border-amber-200 text-amber-950')
+                                : (isDarkMode ? 'bg-zinc-950/80 border-red-500/30 text-red-300' : 'bg-red-50/60 border-red-200 text-red-950')
+                            }`}>
+                              <div className="flex justify-between items-center text-[10px] font-extrabold uppercase tracking-wider">
+                                <span className="opacity-75">Room Specs & Readiness</span>
+                                <span className="flex items-center gap-1 font-mono font-bold">
+                                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                    effectiveStatus === 'Available' ? 'bg-emerald-500 animate-pulse' : effectiveStatus === 'Cleaning' ? 'bg-amber-500 animate-spin' : 'bg-red-500'
+                                  }`} />
+                                  {effectiveStatus}
                                 </span>
-                              ))}
+                              </div>
+                              <div className="flex justify-between items-center text-[11px] pt-1.5 border-t border-dashed border-current/20 font-medium">
+                                <span className="opacity-70">Max Guest Capacity:</span>
+                                <span className="font-semibold font-mono">{room.maxGuests || 2} Persons</span>
+                              </div>
+                              {room.amenities && room.amenities.length > 0 ? (
+                                <div className="space-y-1">
+                                  <span className="text-[10px] opacity-60 font-medium block">Features & Amenities:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {room.amenities.map((amenity, idx) => (
+                                      <span key={idx} className={`px-2 py-0.5 rounded-md text-[9px] font-bold border ${
+                                        isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-slate-200 text-slate-700'
+                                      }`}>
+                                        {amenity}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] opacity-75 italic pt-0.5">
+                                  {effectiveStatus === 'Available' ? 'Cleaned, sanitized & ready for check-in' : effectiveStatus === 'Cleaning' ? 'Housekeeping in progress' : 'Under maintenance'}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -9802,7 +9916,7 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-sm shadow-2xl relative ${
+              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
               }`}
             >
@@ -9816,41 +9930,65 @@ export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMod
               </button>
 
               <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
-                  <Shield className="w-5 h-5" />
+                <div className={`p-2.5 rounded-xl ${isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
+                  <LogOut className="w-5 h-5" />
                 </div>
-                <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Mandatory Shift Handover
-                </h3>
+                <div>
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Sign Out Options
+                  </h3>
+                  <p className="text-[11px] font-mono text-zinc-500">
+                    Shift Ending Confirmation
+                  </p>
+                </div>
               </div>
               
-              <p className={`text-sm mb-6 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                Direct sign out is locked. You must complete your shift audit and handover before signing out (even if collections are GH₵0.00).
+              <p className={`text-xs mb-6 leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                Would you like to complete a shift handover audit to record your cash and mobile money collections before signing out, or sign out directly?
               </p>
 
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowSignOutModal(false)}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                    isDarkMode 
-                      ? 'bg-zinc-950 hover:bg-zinc-850 border border-zinc-800 text-zinc-400' 
-                      : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 shadow-xs'
-                  }`}
-                >
-                  Cancel
-                </button>
+              <div className="flex flex-col gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
                     setShowSignOutModal(false);
                     handleOpenHandoverModal();
                   }}
-                  className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-purple-500/20 flex items-center justify-center gap-1.5"
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-purple-500/20 flex items-center justify-center gap-2"
                 >
                   <Shield className="w-4 h-4" />
-                  Proceed to Handover
+                  Perform Handover & Sign Out
                 </button>
+
+                <div className="grid grid-cols-2 gap-2.5 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSignOutModal(false);
+                      onLogout();
+                    }}
+                    className={`py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
+                      isDarkMode 
+                        ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20' 
+                        : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
+                    }`}
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Direct Sign Out
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSignOutModal(false)}
+                    className={`py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                      isDarkMode 
+                        ? 'bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700' 
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
