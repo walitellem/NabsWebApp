@@ -359,4 +359,4 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   );
 };
 
-export default WelcomeView;
+// Removed default export for build stability

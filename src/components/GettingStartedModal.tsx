@@ -38,7 +38,7 @@ interface TutorialStep {
   highlights: string[];
 }
 
-export default function GettingStartedModal({ isOpen, onClose, currentUser, isDarkMode }: GettingStartedModalProps) {
+export function GettingStartedModal({ isOpen, onClose, currentUser, isDarkMode }: GettingStartedModalProps) {
   const [selectedRole, setSelectedRole] = useState<'Manager' | 'Receptionist'>(
     currentUser.role === 'Manager' ? 'Manager' : 'Receptionist'
   );

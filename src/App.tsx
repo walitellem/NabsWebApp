@@ -11,17 +11,17 @@ import { initializeDb } from './data';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { User } from './types';
 import { AnimatePresence, motion } from 'motion/react';
-import LoginPortal from './components/LoginPortal';
-import ManagerDashboard from './components/ManagerDashboard';
-import ReceptionistDashboard from './components/ReceptionistDashboard';
-import WelcomeView from './components/WelcomeView';
+import { LoginPortal } from './components/LoginPortal';
+import { ManagerDashboard } from './components/ManagerDashboard';
+import { ReceptionistDashboard } from './components/ReceptionistDashboard';
+import { WelcomeView } from './components/WelcomeView';
 import { UnauthorizedPage } from './components/UnauthorizedPage';
 import { ToastProvider } from './components/ToastContext';
 import { LoadingProvider } from './components/LoadingContext';
 import { LoadingOverlay } from './components/LoadingOverlay';
-import GettingStartedModal from './components/GettingStartedModal';
+import { GettingStartedModal } from './components/GettingStartedModal';
 
-export default function App() {
+export function App() {
   const [activeView, setActiveView] = useState<'welcome' | 'dashboard'>('welcome');
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {

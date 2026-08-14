@@ -303,7 +303,7 @@ const getDrinkPaidAmount = (s: any) => {
   return isUnpaid ? 0 : (isSplit ? (Number(s.paidAmount) || 0) : Number(s.totalPrice || 0));
 };
 
-export default function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onToggleTheme, onOpenTutorial }: ReceptionistDashboardProps) {
+export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onToggleTheme, onOpenTutorial }: ReceptionistDashboardProps) {
   const { withLoading } = useLoading();
   const branch: Branch = currentUser.branch || 'Annex';
   const { addToast } = useToast();

@@ -22,7 +22,7 @@ interface LoginPortalProps {
   onToggleTheme: () => void;
 }
 
-export default function LoginPortal({ onLoginSuccess, onForbidden, isDarkMode, onToggleTheme }: LoginPortalProps) {
+export function LoginPortal({ onLoginSuccess, onForbidden, isDarkMode, onToggleTheme }: LoginPortalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
