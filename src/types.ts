@@ -70,6 +70,7 @@ export interface Booking {
   createdAt: string;
   actualCheckOutDate?: string;
   amountPaid?: number;
+  priorAmountPaid?: number;
   deposit?: number;
   amountReceived?: number;
   balance_due?: number;

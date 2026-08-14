@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './ToastContext';
 import { useLoading } from './LoadingContext';
+import { validateRevenueIntegrity, RevenueAnomaly } from '../utils/revenueValidator';
 import { BestSellingDrinks } from './BestSellingDrinks';
 import { DateRangePicker } from './DateRangePicker';
 import { WalkInActivityLedger } from './WalkInActivityLedger';
@@ -1254,6 +1255,12 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
   };
 
   const getDrinkPaidAmount = (s: any) => {
+    // If it was settled at checkout, we must look at what was ORIGINALLY paid at the bar (if any)
+    if (s.settledPaymentMethod) {
+       if (s.paymentMethod === 'Unpaid (Add to Room Bill)' || s.paymentStatus === 'Unpaid') return 0;
+       return Number(s.paidAmount !== undefined && s.paidAmount !== null ? s.paidAmount : (s.paymentStatus === 'Paid' ? s.totalPrice : 0));
+    }
+    
     if (s.paymentStatus === 'Paid') return Number(s.totalPrice || 0);
     if (s.paymentStatus === 'Unpaid') return 0;
     if (s.paymentStatus === 'Split') return Number(s.paidAmount || 0);
@@ -1263,7 +1270,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
   };
 
   const isDrinkSettledToRoom = (s: any) => {
-    return s.paymentMethod === 'Unpaid (Add to Room Bill)' || s.paymentStatus === 'Unpaid' || !!s.settledPaymentMethod;
+    // We DO NOT blindly consider settledPaymentMethod as fully settled-to-room because 
+    // it could be a Split (Paid & Unpaid) where a portion was paid at the bar!
+    // The bar portion MUST still be counted in the bar ledger!
+    return s.paymentMethod === 'Unpaid (Add to Room Bill)' || s.paymentStatus === 'Unpaid';
   };
 
   const coreLodgeTransactions = React.useMemo(() => {
@@ -2928,8 +2938,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
       const paidAmount = getDrinkPaidAmount(s);
       const status = s.paymentStatus || 'Paid';
       
-      // SKIP drinks that were settled at checkout to avoid double counting with RoomRevenue DrinkSettlement entries
-      if (s.settledPaymentMethod) return;
+      // DO NOT blindly skip settled drinks. Only skip if nothing was paid at the bar.
+      // if (s.settledPaymentMethod) return; // REMOVED
+      if (paidAmount <= 0) return; // Wait, let's just make sure we only push if paidAmount > 0
+
 
       entries.push({
         id: s.id,
@@ -3263,11 +3275,11 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     let drinkMomo = 0;
 
     activeDrinkSales.forEach(s => {
-      // EXCLUDE drink sales that were settled at checkout to avoid double counting
-      if (s.settledPaymentMethod) return;
+      // DO NOT blindly skip settled drinks because the original bar-paid portion must be counted in the active shift
+      // if (s.settledPaymentMethod) return; // REMOVED
 
       // Only count the PAID portion
-      const paid = Number(s.paidAmount || (s.paymentStatus === 'Paid' ? s.totalPrice : 0));
+      const paid = Number(s.paidAmount !== undefined && s.paidAmount !== null ? s.paidAmount : (s.paymentStatus === 'Paid' ? s.totalPrice : 0));
       if (paid <= 0) return;
 
       // Safety check: skip purely unpaid
@@ -3361,9 +3373,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     const barRevenue = drinkSales
       .filter(s => (s.branch === branch || (s as any).lodgeBranch === branch) && isTargetYear(s.timestamp, s))
       .reduce((acc, curr) => {
-        // Only count drinks that are NOT settled as part of a room bill
-        const isSettledToRoom = curr.paymentMethod === 'Unpaid (Add to Room Bill)' || curr.paymentStatus === 'Unpaid' || !!curr.settledPaymentMethod;
-        if (isSettledToRoom) return acc;
+        // DO NOT unconditionally skip settled drinks! A settled drink might have a bar-paid portion (e.g. Split Paid & Unpaid)
+        // The getDrinkPaidAmount function correctly isolates the bar-paid portion.
+        const isCompletelyUnpaidAtBar = curr.paymentMethod === 'Unpaid (Add to Room Bill)' || curr.paymentStatus === 'Unpaid';
+        if (isCompletelyUnpaidAtBar) return acc;
         
         const paid = getDrinkPaidAmount(curr);
         return acc + paid;
@@ -3664,7 +3677,50 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
     });
   }, [selectedYear, financialData, bookings, rooms]);
 
-  const theme = getThemeClasses(isDarkMode);
+  const anomalies = React.useMemo(() => {
+    return validateRevenueIntegrity(bookings, roomRevenue, drinkSales);
+  }, [bookings, roomRevenue, drinkSales]);
+
+const theme = getThemeClasses(isDarkMode);
+
+  // Helper component for revenue status icons
+  const RevenueStatusIcon = ({ 
+    anomaliesList, 
+    branchFilter 
+  }: { 
+    anomaliesList: RevenueAnomaly[], 
+    branchFilter?: Branch 
+  }) => {
+    const filtered = React.useMemo(() => {
+      if (!branchFilter) return anomaliesList;
+      // Filter anomalies that involve bookings from the specified branch
+      return anomaliesList.filter(a => {
+        if (!a.bookingId) return true;
+        const b = bookings.find(book => book.id === a.bookingId);
+        return b ? b.branch === branchFilter : true;
+      });
+    }, [anomaliesList, branchFilter]);
+
+    if (filtered.length === 0) {
+      return (
+        <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full" title="Data Verified: Matches Raw Ledger">
+          <ShieldCheck className="w-3 h-3" />
+          Verified
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1 text-[10px] text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-full cursor-help group relative" title="Revenue Discrepancy Found">
+        <AlertTriangle className="w-3 h-3" />
+        Anomaly
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl hidden group-hover:block z-[60] text-[11px] text-zinc-700 dark:text-zinc-300 font-normal">
+          <p className="font-bold text-rose-600 mb-1 leading-tight">Integrity Check Failed</p>
+          <p className="leading-relaxed text-[10px]">The system auditor found {filtered.length} discrepancies in the ledger. Review the warning banner at the top of the dashboard for full details.</p>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div id="manager-dashboard-container" tabIndex={-1} className="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 transition-colors duration-200 min-h-screen w-full flex flex-col md:flex-row font-sans outline-none">
@@ -3895,6 +3951,37 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
         {/* Main Content Area */}
       <main className="flex-1 p-4 md:p-6 bg-zinc-50 dark:bg-zinc-950 min-h-screen overflow-y-auto transition-colors duration-300 flex flex-col">
         
+        
+        {/* REVENUE INTEGRITY WARNINGS */}
+        {anomalies.length > 0 && activeTab === 'overview' && (
+          <div className="mb-6 space-y-3">
+            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-3 mb-3 pb-3 border-b border-rose-200 dark:border-rose-900/50">
+                <div className="bg-rose-100 dark:bg-rose-900/50 p-2 rounded-lg text-rose-600 dark:text-rose-400">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-rose-900 dark:text-rose-100 text-sm">Revenue Reconciliation Anomaly Detected</h3>
+                  <p className="text-xs text-rose-700 dark:text-rose-300">The system auditor caught discrepancies between Raw Ledger Receipts and Categorized Expected Revenue. Double-counting may be occurring.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {anomalies.map(anomaly => (
+                  <div key={anomaly.id} className="bg-white/60 dark:bg-zinc-900/40 p-3 rounded-lg flex items-start gap-3 border border-rose-100 dark:border-rose-900/30">
+                    <div className="mt-0.5">
+                      <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-rose-800 dark:text-rose-200 text-xs mb-1">{anomaly.title}</h4>
+                      <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">{anomaly.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mobile Header (only visible on md-) */}
         <header className="w-full h-16 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-4 sticky top-0 z-30 md:hidden mb-4 rounded-2xl">
           <div className="flex items-center gap-3">
@@ -4199,7 +4286,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                         <div className={`border rounded-xl p-3 ${
                           isDarkMode ? 'bg-zinc-950 border-zinc-800/60' : 'bg-slate-50 border-slate-100'
                         }`}>
-                          <span className={`text-[10px] font-mono uppercase ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Revenue</span>
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-mono uppercase ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Revenue</span>
+                            <RevenueStatusIcon anomaliesList={anomalies} branchFilter="Annex" />
+                          </div>
                           <div className={`text-sm font-bold mt-1 font-mono ${isDarkMode ? 'text-zinc-200' : 'text-slate-800'}`}>GH₵{annexStats.revenue.toFixed(2)}</div>
                         </div>
                         <div className={`border rounded-xl p-3 ${
@@ -4274,7 +4364,10 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                         <div className={`border rounded-xl p-3 ${
                           isDarkMode ? 'bg-zinc-950 border-zinc-800/60' : 'bg-slate-50 border-slate-100'
                         }`}>
-                          <span className={`text-[10px] font-mono uppercase ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Revenue</span>
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-mono uppercase ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Revenue</span>
+                            <RevenueStatusIcon anomaliesList={anomalies} branchFilter="Ayigya" />
+                          </div>
                           <div className={`text-sm font-bold mt-1 font-mono ${isDarkMode ? 'text-zinc-200' : 'text-slate-800'}`}>GH₵{ayigyaStats.revenue.toFixed(2)}</div>
                         </div>
                         <div className={`border rounded-xl p-3 ${
@@ -7582,7 +7675,16 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
                           <tbody>
                             {financialData.monthlyData.map((data, index) => (
                               <tr key={index} className={`border-b last:border-0 ${isDarkMode ? 'border-zinc-800/60' : 'border-slate-100'} transition-colors ${theme.tableRowHover}`}>
-                                <td className={`py-4 px-4 font-bold text-sm ${theme.text}`}>{data.month}</td>
+                                <td className={`py-4 px-4 font-bold text-sm ${theme.text}`}>
+                                  <div className="flex items-center gap-3">
+                                    {data.month}
+                                    {/* 
+                                      For monthly breakdown, we check if ANY anomaly exists in that month.
+                                      For now, let's just show global check if any exist. 
+                                    */}
+                                    <RevenueStatusIcon anomaliesList={anomalies} />
+                                  </div>
+                                </td>
                                 <td className="py-4 px-4 font-mono text-xs text-right text-zinc-500 dark:text-zinc-400">GH₵{data.Annex.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                                 <td className="py-4 px-4 font-mono text-xs text-right text-zinc-500 dark:text-zinc-400">GH₵{data.Ayigya.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                                 <td className={`py-4 px-4 font-mono text-sm font-bold text-right ${theme.text}`}>GH₵{data.Total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
