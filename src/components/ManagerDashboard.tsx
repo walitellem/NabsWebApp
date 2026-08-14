@@ -19,7 +19,8 @@ import {
 import { 
   LogOut, Settings,  Users, BedDouble, Activity, TrendingUp, DollarSign, 
   Building, Plus, Edit2, Pencil, Trash2, Key, RefreshCw, Check, X, Sliders, AlertCircle, Info, ChevronRight, Sun, Moon, Search, Clock, UserCheck, UserMinus, Printer, Download, HelpCircle, Lock, AlertTriangle, Menu, Calendar,
-  Bed, Zap, CheckCircle, Receipt, FileText, BarChart3, ShieldCheck, ShieldAlert, Eye, Wine, Coffee, GlassWater, ShoppingBag, Package, Sparkles
+  Bed, Zap, CheckCircle, Receipt, FileText, BarChart3, ShieldCheck, ShieldAlert, Eye, Wine, Coffee, GlassWater, ShoppingBag, Package, Sparkles,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './ToastContext';
@@ -848,6 +849,32 @@ export default function ManagerDashboard({ currentUser, onLogout, isDarkMode, on
   const [handoverFilterStartDate, setHandoverFilterStartDate] = useState<string>('');
   const [handoverFilterEndDate, setHandoverFilterEndDate] = useState<string>('');
   const [selectedHandoverForAudit, setSelectedHandoverForAudit] = useState<HandoverRecord | null>(null);
+  const [auditBookingId, setAuditBookingId] = useState<string | null>(null);
+
+  const handleVoidRevenueEntry = async (revenueId: string) => {
+    if (!window.confirm("CRITICAL ACTION: Are you sure you want to permanently VOID and DELETE this revenue receipt from the ledger? This will immediately correct the anomaly metrics but cannot be undone.")) return;
+    
+    try {
+      await safeDeleteDoc(doc(db, 'RoomRevenue', revenueId));
+      
+      // Log the audit action
+      const logId = `log_${Math.random().toString(36).substring(2, 11)}`;
+      await safeSetDoc(doc(db, 'auditLogs', logId), {
+        timestamp: new Date().toISOString(),
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: 'Void Revenue Receipt',
+        details: `Manager voided ghost receipt #${revenueId} to resolve revenue reconciliation anomaly.`,
+        branch: currentUser.assignedBranch || 'Annex'
+      });
+      
+      addToast('Receipt Voided Successfully', 'success', 'The ledger has been corrected and anomalies will be re-calculated.', 3000);
+    } catch (err: any) {
+      console.error("Failed to void receipt:", err);
+      addToast('Void Failed', 'error', err.message);
+    }
+  };
   const [auditFilterCategory, setAuditFilterCategory] = useState<'all' | 'rooms' | 'walkins' | 'drinks' | 'staff' | 'cash' | 'momo'>('all');
 
   const getHandoverBreakdownItems = (handover: HandoverRecord): HandoverItemBreakdown[] => {
@@ -3971,10 +3998,23 @@ const theme = getThemeClasses(isDarkMode);
                     <div className="mt-0.5">
                       <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <h4 className="font-bold text-rose-800 dark:text-rose-200 text-xs mb-1">{anomaly.title}</h4>
                       <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">{anomaly.description}</p>
                     </div>
+                    {anomaly.bookingId && (
+                      <button
+                        onClick={() => setAuditBookingId(anomaly.bookingId!)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                          isDarkMode 
+                            ? 'bg-rose-500/20 border-rose-500/30 text-rose-300 hover:bg-rose-500/30' 
+                            : 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50 shadow-sm'
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Quick Audit Ledger
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -9463,6 +9503,172 @@ const theme = getThemeClasses(isDarkMode);
             </div>
           );
         })()}
+
+        {/* QUICK AUDIT REVENUE LEDGER MODAL */}
+        <AnimatePresence>
+          {auditBookingId && (() => {
+            const auditBooking = bookings.find(b => b.id === auditBookingId);
+            const auditRevenues = roomRevenue.filter(r => r.bookingId === auditBookingId);
+            
+            return (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-hidden">
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                  className={`w-full max-w-2xl flex flex-col max-h-[85vh] rounded-3xl border shadow-2xl overflow-hidden ${
+                    isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className={`px-6 py-5 border-b flex items-center justify-between shrink-0 ${
+                    isDarkMode ? 'border-zinc-800 bg-zinc-900/50' : 'border-slate-100 bg-slate-50'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-sm tracking-tight">Quick Audit: Raw Ledger Receipts</h3>
+                        <p className="text-[11px] text-zinc-500 font-mono mt-0.5 uppercase tracking-wider">
+                          Booking ID: {auditBookingId.slice(-8).toUpperCase()}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setAuditBookingId(null)}
+                      className={`p-2 rounded-xl transition-all cursor-pointer ${
+                        isDarkMode ? 'hover:bg-zinc-800 text-zinc-500' : 'hover:bg-slate-200 text-slate-400'
+                      }`}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                    <div className={`p-4 rounded-2xl border mb-6 grid grid-cols-2 gap-4 ${
+                      isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-blue-50/30 border-blue-100'
+                    }`}>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">Guest Name</span>
+                        <p className="font-bold text-xs flex items-center gap-2">
+                          <UserIcon className="w-3.5 h-3.5 text-blue-500" />
+                          {auditBooking?.guestName || 'Unknown Guest'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">Stay Period</span>
+                        <p className="text-[11px] font-medium flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                          {auditBooking?.checkInDate} — {auditBooking?.checkOutDate}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">Room Total Due</span>
+                        <p className="font-black text-sm text-blue-600 dark:text-blue-400">
+                          GH₵ {Number(auditBooking?.totalPrice || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">Total Paid (Per Ledger)</span>
+                        <p className="font-black text-sm text-emerald-500">
+                          GH₵ {auditRevenues.reduce((sum, r) => sum + (r.amount || 0), 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="text-[10px] font-mono font-black uppercase tracking-widest text-zinc-400 mb-2">Itemized Revenue Log</h4>
+                      
+                      {auditRevenues.length === 0 ? (
+                        <div className="py-12 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                          <Receipt className="w-10 h-10 text-zinc-300 mx-auto mb-3 opacity-20" />
+                          <p className="text-xs text-zinc-500">No raw revenue receipts found for this booking.</p>
+                        </div>
+                      ) : (
+                        auditRevenues.map((rev, idx) => (
+                          <div 
+                            key={rev.id || idx} 
+                            className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${
+                              isDarkMode 
+                                ? 'bg-zinc-950 border-zinc-800 hover:border-zinc-700' 
+                                : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                rev.revenueType === 'Deposit' ? 'bg-blue-500/10 text-blue-500' : 'bg-emerald-500/10 text-emerald-500'
+                              }`}>
+                                <Receipt className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="font-bold text-xs">{rev.revenueType || 'Payment'}</span>
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                    isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500'
+                                  }`}>
+                                    {rev.paymentMethod}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {rev.timestamp || rev.dateCreated || 'N/A'}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <UserIcon className="w-3 h-3" />
+                                    {rev.receptionistName}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <span className="text-sm font-black text-emerald-500 block">
+                                  GH₵ {Number(rev.amount || 0).toFixed(2)}
+                                </span>
+                                <span className="text-[9px] text-zinc-400 font-mono">Receipt ID: {rev.id.slice(-6).toUpperCase()}</span>
+                              </div>
+                              
+                              <button
+                                onClick={() => handleVoidRevenueEntry(rev.id)}
+                                className={`p-2 rounded-xl transition-all cursor-pointer ${
+                                  isDarkMode 
+                                    ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' 
+                                    : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                                }`}
+                                title="Void and Delete Receipt"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`px-6 py-4 border-t shrink-0 flex items-center justify-between ${
+                    isDarkMode ? 'border-zinc-800 bg-zinc-900/50' : 'border-slate-100 bg-slate-50'
+                  }`}>
+                    <div className="flex items-center gap-2 text-[10px] text-rose-500 font-bold">
+                      <AlertCircle className="w-4 h-4" />
+                      Auditing raw ledger data is restricted to Managers only.
+                    </div>
+                    <button
+                      onClick={() => setAuditBookingId(null)}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        isDarkMode ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700' : 'bg-white border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      Close Audit
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
+        </AnimatePresence>
       </AnimatePresence>
 
     </div>
