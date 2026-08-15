@@ -199,10 +199,22 @@ export function App() {
     localStorage.setItem('nabslodge_active_session', JSON.stringify(user));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // 1. Reset React state immediately so UI transitions to login screen
     setCurrentUser(null);
     setActiveView('welcome');
+
+    // 2. Clear all local session storage keys
     localStorage.removeItem('nabslodge_active_session');
+
+    // 3. Explicitly sign out of Firebase Authentication so session cookie/token is destroyed
+    if (isFirebaseConfigured && auth) {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.warn("Firebase signOut error in handleLogout:", err);
+      }
+    }
   };
 
   const handleForbidden = () => {

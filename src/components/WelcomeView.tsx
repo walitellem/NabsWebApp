@@ -30,8 +30,6 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
-    if (currentUser.role !== 'Manager') return;
-
     let currentRooms: Room[] = getRooms();
     let currentBookings: Booking[] = getBookings();
 
@@ -57,7 +55,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
       setAnnexAvailableRooms(annex);
 
       // Auto-heal: Ensure Firestore room status perfectly matches ground-truth active checked-in bookings
-      if (isFirebaseConfigured && db) {
+      if (isFirebaseConfigured && db && currentUser.role === 'Manager') {
         roomsList.forEach(r => {
           const hasActiveCheckedIn = bookingsList.some(b => 
             (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
@@ -281,24 +279,47 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                 </div>
               </div>
               
-              {currentUser.role === 'Manager' && (
-                <div className="grid grid-cols-2 gap-4 h-full">
-                  <div className={`p-5 rounded-3xl border flex flex-col justify-start space-y-3 ${
+              {currentUser.role === 'Manager' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full">
+                  <div className={`p-5 rounded-3xl border flex flex-col justify-start space-y-3 relative overflow-hidden ${
                     isDarkMode ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-emerald-50/50 border-emerald-100'
-                  } max-h-[160px] overflow-hidden`}>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Key size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
-                      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Available Rooms</span>
+                  } max-h-[180px]`}>
+                    <div className="flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Key size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Available Rooms</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span>Scanning</span>
+                      </div>
                     </div>
                     <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-500/20 pr-1">
                       <div className="space-y-1.5">
-                        <div className="flex justify-between items-end">
-                          <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>Ayigya Lodge ({mainAvailableRooms.length})</span>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Ayigya Lodge ({mainAvailableRooms.length})
+                          </span>
                         </div>
                         {mainAvailableRooms.length > 0 ? (
                           <div className="flex flex-wrap gap-1.5">
                             {mainAvailableRooms.map((r, i) => (
-                              <span key={`${r}-${i}`} className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-200/50 text-emerald-700'}`}>
+                              <span 
+                                key={`ayigya-${r}-${i}`} 
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                    : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                }`}
+                              >
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
                                 {r}
                               </span>
                             ))}
@@ -308,13 +329,27 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                         )}
                       </div>
                       <div className="space-y-1.5">
-                        <div className="flex justify-between items-end">
-                          <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>Annex Lodge ({annexAvailableRooms.length})</span>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Annex Lodge ({annexAvailableRooms.length})
+                          </span>
                         </div>
                         {annexAvailableRooms.length > 0 ? (
                           <div className="flex flex-wrap gap-1.5">
                             {annexAvailableRooms.map((r, i) => (
-                              <span key={`${r}-${i}`} className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-200/50 text-emerald-700'}`}>
+                              <span 
+                                key={`annex-${r}-${i}`} 
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                    : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                }`}
+                              >
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
                                 {r}
                               </span>
                             ))}
@@ -340,6 +375,86 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                         </span>
                         <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>Requests</span>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full">
+                  <div className={`p-5 rounded-3xl border flex flex-col justify-start space-y-3 relative overflow-hidden ${
+                    isDarkMode ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-emerald-50/50 border-emerald-100'
+                  } max-h-[180px]`}>
+                    <div className="flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Key size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          Available Rooms
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span>Scanning</span>
+                      </div>
+                    </div>
+                    
+                    {(() => {
+                      const branchRooms = currentUser.branch === 'Ayigya' ? mainAvailableRooms : annexAvailableRooms;
+                      return (
+                        <div className="space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-500/20 pr-1">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              {currentUser.branch || 'Current'} Lodge ({branchRooms.length})
+                            </span>
+                          </div>
+                          {branchRooms.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {branchRooms.map((r, i) => (
+                                <span 
+                                  key={`rec-room-${r}-${i}`} 
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                    isDarkMode 
+                                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                      : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                  }`}
+                                >
+                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                  </span>
+                                  {r}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={`text-[10px] italic ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>No rooms currently available</div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className={`p-5 rounded-3xl border flex flex-col justify-center space-y-3 ${
+                    isDarkMode ? 'bg-blue-500/5 border-blue-500/10' : 'bg-blue-50/50 border-blue-100'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                      </span>
+                      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                        Branch Sync
+                      </span>
+                    </div>
+                    <div className="flex flex-col flex-1 justify-center space-y-1">
+                      <div className="text-sm font-bold tracking-tight text-zinc-800 dark:text-zinc-200">
+                        {currentUser.branch || 'Branch'} Portal Active
+                      </div>
+                      <p className={`text-[11px] leading-tight ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                        Real-time synchronization connected & ready for operations.
+                      </p>
                     </div>
                   </div>
                 </div>

@@ -31,6 +31,8 @@ import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
 import { WalkInActivityLedger } from './WalkInActivityLedger';
 import { EditBookingModal } from './EditBookingModal';
 import { EmptyState } from './EmptyState';
+import { HeartbeatIndicator } from './HeartbeatIndicator';
+import { DrinkSalesLedger } from './DrinkSalesLedger';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -2257,6 +2259,46 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const currentSaleIndex = saleToEdit ? editableShiftDrinkSales.findIndex(s => s.id === saleToEdit.id) : -1;
   const hasNextSale = currentSaleIndex > 0;
   const hasPrevSale = currentSaleIndex < editableShiftDrinkSales.length - 1 && currentSaleIndex !== -1;
+
+  const handleSettleDrinkSale = async (sale: DrinkSale, method: 'Cash' | 'Mobile Money') => {
+    try {
+      const originalBarPaid = sale.paymentMethod === 'Split (Paid & Unpaid)' || sale.paymentStatus === 'Split'
+        ? (Number(sale.paidAmount) || 0)
+        : 0;
+
+      const dueAmount = isUnpaidDrink(sale) ? getDrinkUnpaidAmount(sale) : (sale.totalPrice - originalBarPaid);
+
+      const updatedSale: DrinkSale = {
+        ...sale,
+        paymentStatus: 'Paid',
+        paidAmount: originalBarPaid,
+        unpaidAmount: 0,
+        settledPaymentMethod: method
+      };
+
+      if (db) {
+        await safeSetDoc(doc(db, 'drinkSales', updatedSale.id), updatedSale, { merge: true });
+      }
+
+      const updatedList = drinkSales.map(s => s.id === updatedSale.id ? updatedSale : s);
+      setDrinkSales(updatedList);
+      saveDrinkSales(updatedList);
+
+      addToast('Drink Tab Settled', 'success', `Successfully settled GH₵${dueAmount.toFixed(2)} via ${method} for ${sale.guestName}.`);
+
+      addAuditLog(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        branch,
+        'Drink Tab Settled',
+        `Settled outstanding drink tab of GH₵${dueAmount.toFixed(2)} for ${sale.guestName}${sale.roomNumber ? ` (Room ${sale.roomNumber})` : ''} via ${method}.`
+      );
+    } catch (err) {
+      console.error('Error settling drink sale:', err);
+      addToast('Settlement Failed', 'error', 'Could not settle drink bill. Please try again.');
+    }
+  };
 
 
 
@@ -4515,12 +4557,12 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
             Drinks ({drinkSales.length})
           </button>
 
-          <div className={`mt-8 border-t pt-6 ${isDarkMode ? 'border-zinc-900' : 'border-slate-200'}`}>
-            <h4 className={`text-[10px] font-mono uppercase tracking-widest px-4 mb-2 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Security Status</h4>
-            <div className={`flex items-center gap-2 px-4 text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-              <MapPin className={`w-3.5 h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-              Strict Isolation Active
-            </div>
+          <div className={`mt-6 border-t pt-4 ${isDarkMode ? 'border-zinc-900' : 'border-slate-200'}`}>
+            <HeartbeatIndicator 
+              role="Receptionist" 
+              branch={branch}
+              isDarkMode={isDarkMode} 
+            />
           </div>
         </nav>
 
@@ -6058,10 +6100,20 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                 <div className="pt-4 flex justify-end">
                   <button
                     type="submit"
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
+                    disabled={isCheckingIn}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <UserCheck className="w-4 h-4" />
-                    Confirm Booking & Check-In
+                    {isCheckingIn ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Processing Booking...
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="w-4 h-4" />
+                        Confirm Booking & Check-In
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -6717,125 +6769,34 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   </div>
                 </div>
 
-                {/* Sales Transactions List */}
-                <div>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider font-mono mb-4 ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
-                    Recorded Sales Ledger
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className={`border-b text-[10px] font-mono uppercase tracking-wider ${isDarkMode ? 'border-zinc-800 text-zinc-400' : 'border-slate-200 text-slate-500'}`}>
-                          <th className="py-3 px-3">Serial / Time</th>
-                          <th className="py-3 px-3">Drink Item</th>
-                          <th className="py-3 px-3 text-center">Qty</th>
-                          <th className="py-3 px-3">Guest / Room</th>
-                          <th className="py-3 px-3">Payment</th>
-                          <th className="py-3 px-3 text-right">Total Price</th>
-                          <th className="py-3 px-3 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isDarkMode ? 'divide-zinc-800/60' : 'divide-slate-100'}`}>
-                        {activeShiftDrinkSales.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-zinc-400">
-                              No drink sales recorded yet during this shift.
-                            </td>
-                          </tr>
-                        ) : (
-                          activeShiftDrinkSales.map((sale) => (
-                            <tr key={sale.id} className={`${isDarkMode ? 'hover:bg-zinc-900/40' : 'hover:bg-slate-50/50'}`}>
-                              <td className="py-3 px-3">
-                                <div className="font-mono font-bold text-[11px] text-purple-400">{sale.serialNumber || sale.id.slice(-6)}</div>
-                                <div className={`text-[10px] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{sale.timestamp}</div>
-                              </td>
-                              <td className="py-3 px-3 font-semibold">
-                                {sale.items ? (
-                                  <div className="space-y-0.5">
-                                    {sale.items.map((item) => (
-                                      <div key={item.drinkId} className="text-xs">
-                                        {item.drinkName} <span className="text-[10px] text-zinc-500">(GH₵{item.unitPrice.toFixed(2)} ea)</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <>
-                                    {sale.drinkName}
-                                    <div className={`text-[10px] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>GH₵{sale.unitPrice?.toFixed(2)} each</div>
-                                  </>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold">
-                                x{sale.quantity}
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="font-medium">{sale.guestName}</div>
-                                {sale.roomNumber && (
-                                  <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400">
-                                    Room {sale.roomNumber}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="flex flex-col gap-1 items-start">
-                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                    isCashMethod(sale.paymentMethod)
-                                      ? 'bg-emerald-500/10 text-emerald-400'
-                                      : 'bg-blue-500/10 text-blue-400'
-                                  }`}>
-                                    {sale.paymentMethod}
-                                  </span>
-                                  {sale.paymentStatus === 'Paid' ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-bold uppercase tracking-wider">
-                                      Paid {sale.settledPaymentMethod ? `(Settled: ${sale.settledPaymentMethod})` : ''}
-                                    </span>
-                                  ) : sale.paymentStatus === 'Split' ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold uppercase tracking-wider">
-                                      Partial Unpaid {sale.splitPaidMethod ? `(${sale.splitPaidMethod})` : ''}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 text-[9px] font-bold uppercase tracking-wider">
-                                      Unpaid (Pending)
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-right font-black text-purple-400">
-                                GH₵ {sale.totalPrice.toFixed(2)}
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                {sale.settledPaymentMethod ? (
-                                  <div className="flex items-center justify-center gap-1 text-[10px] text-zinc-500 font-medium" title="Locked: Settled at Checkout">
-                                    <Lock className="w-3 h-3" /> Settled
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-center items-center gap-1">
-                                    <button
-                                      onClick={() => handleOpenEditDrinkSale(sale)}
-                                      className="p-1.5 rounded-lg hover:bg-purple-500/10 text-purple-400 transition-colors cursor-pointer"
-                                      title="Edit Sale"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setSaleToDelete(sale);
-                                        setShowDeleteSaleConfirm(true);
-                                      }}
-                                      className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400 transition-colors cursor-pointer"
-                                      title="Delete Sale"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                {/* Enhanced Drink Sales Ledger with Shift Toggle, Date Range, Search & Paid/Unpaid Status */}
+                <div className="pt-2">
+                  <DrinkSalesLedger
+                    sales={drinkSales}
+                    drinks={drinks}
+                    currentUser={currentUser}
+                    branch={branch}
+                    isDarkMode={isDarkMode}
+                    onEditSale={handleOpenEditDrinkSale}
+                    onDeleteSale={(sale) => {
+                      setSaleToDelete(sale);
+                      setShowDeleteSaleConfirm(true);
+                    }}
+                    onSettleSale={handleSettleDrinkSale}
+                    onRecordNewSale={() => {
+                      const availableDrinks = drinks.filter(d => d.inStock !== false);
+                      if (availableDrinks.length > 0) {
+                        setSelectedDrinkId(availableDrinks[0].id);
+                      } else {
+                        setSelectedDrinkId('');
+                      }
+                      setDrinkQty(1);
+                      setDrinkGuestName('');
+                      setDrinkRoomNumber('');
+                      setDrinkPaymentMethod('Cash');
+                      setShowDrinkOrderModal(true);
+                    }}
+                  />
                 </div>
               </div>
             </motion.div>
@@ -9703,9 +9664,18 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                    disabled={isCheckingIn}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <UserCheck className="w-4 h-4" /> Initialize
+                    {isCheckingIn ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processing...
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="w-4 h-4" /> Initialize
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

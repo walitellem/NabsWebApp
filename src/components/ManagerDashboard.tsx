@@ -30,6 +30,8 @@ import { BestSellingDrinks } from './BestSellingDrinks';
 import { DateRangePicker } from './DateRangePicker';
 import { WalkInActivityLedger } from './WalkInActivityLedger';
 import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
+import { HeartbeatIndicator } from './HeartbeatIndicator';
+import { DrinkSalesLedger } from './DrinkSalesLedger';
 import { parseSafeDate } from '../utils/formatters';
 import { getThemeClasses, getRoomStatusClasses } from '../utils/theme';
 import { db, auth, firebaseConfig, isFirebaseConfigured, safeSetDoc, safeUpdateDoc, safeAddDoc, safeDeleteDoc, safeRunTransaction } from '../firebase';
@@ -2282,11 +2284,13 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
   // --- DRINK MANAGEMENT HANDLERS ---
   const handleSaveDrink = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessingAction) return;
     if (!newDrinkName.trim() || newDrinkPrice <= 0) {
       addToast('Validation Error', 'error', 'Please enter a valid drink name and price.');
       return;
     }
 
+    setIsProcessingAction(true);
     try {
       const drinkObj = {
         name: newDrinkName.trim(),
@@ -2313,6 +2317,8 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     } catch (err: any) {
       console.error("Failed to add drink:", err);
       addToast('Error', 'error', 'Could not add drink.');
+    } finally {
+      setIsProcessingAction(false);
     }
   };
 
@@ -2339,11 +2345,13 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
 
   const handleSaveEditDrink = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessingAction) return;
     if (!drinkToEdit || !editDrinkName.trim() || editDrinkPrice <= 0) {
       addToast('Validation Error', 'error', 'Please enter a valid drink name and price.');
       return;
     }
 
+    setIsProcessingAction(true);
     try {
       const updatedDrinks = drinks.map(d =>
         d.id === drinkToEdit.id
@@ -2366,6 +2374,8 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     } catch (err: any) {
       console.error("Failed to edit drink:", err);
       addToast('Error', 'error', 'Could not update drink.');
+    } finally {
+      setIsProcessingAction(false);
     }
   };
 
@@ -2388,6 +2398,48 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
       addToast('Drink Item Deleted', 'info', `"${drinkName}" removed from store.`);
     } catch (err: any) {
       console.warn("Firestore deleteDoc error for drink:", err);
+    }
+  };
+
+  const handleManagerSettleDrinkSale = async (sale: DrinkSale, method: 'Cash' | 'Mobile Money') => {
+    try {
+      const originalBarPaid = sale.paymentMethod === 'Split (Paid & Unpaid)' || sale.paymentStatus === 'Split'
+        ? (Number(sale.paidAmount) || 0)
+        : 0;
+
+      const dueAmount = (sale.unpaidAmount !== undefined && sale.unpaidAmount !== null)
+        ? Number(sale.unpaidAmount)
+        : (Number(sale.totalPrice || 0) - originalBarPaid);
+
+      const updatedSale: DrinkSale = {
+        ...sale,
+        paymentStatus: 'Paid',
+        paidAmount: originalBarPaid,
+        unpaidAmount: 0,
+        settledPaymentMethod: method
+      };
+
+      if (db) {
+        await safeSetDoc(doc(db, 'drinkSales', updatedSale.id), updatedSale, { merge: true });
+      }
+
+      const updatedList = drinkSales.map(s => s.id === updatedSale.id ? updatedSale : s);
+      setDrinkSales(updatedList);
+      saveDrinkSales(updatedList);
+
+      addToast('Drink Bill Settled', 'success', `Settled GH₵${dueAmount.toFixed(2)} for ${sale.guestName} via ${method}.`);
+
+      addAuditLog(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        sale.branch || 'Global',
+        'Manager Settled Drink Tab',
+        `Manager settled outstanding drink tab of GH₵${dueAmount.toFixed(2)} for ${sale.guestName}${sale.roomNumber ? ` (Room ${sale.roomNumber})` : ''} via ${method}.`
+      );
+    } catch (err: any) {
+      console.error('Error settling drink sale by manager:', err);
+      addToast('Error', 'error', 'Could not settle drink bill.');
     }
   };
 
@@ -2461,6 +2513,7 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
 
   const handleSaveReceptionist = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessingAction) return;
     setRecError('');
 
     if (!recEmail.trim() || !recPassword.trim() || !recName.trim()) {
@@ -2468,139 +2521,144 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
       return;
     }
 
-    if (editingRec) {
-      // Edit: Prepare pristine StaffUpdateInput payload
-      try {
-        // Find auth user? Actually we can't easily find auth user by ID without storing email.
-        // We have email. Let's try to update password via re-auth or just assume manager has permissions to update users.
-        // Simplified: The request asks to make sure the receptionist can login with the NEW password.
-        // Since we don't have the current password, we might need to use admin SDK, but we are client side.
-        // Let's assume we can update password via auth.updatePassword if we are logged in, 
-        // BUT we are logged in as manager. This is a common client-side limitation.
-        // We will stick to updating the local data and firestore data, and hope auth syncs or relies on local data.
-        
-        const updatedInput: StaffUpdateInput = {
-          id: editingRec.id,
-          email: recEmail.toLowerCase().trim(),
-          name: recName,
-          branch: recBranch as Branch,
-          password: recPassword,
-          status: recStatus
-        };
-
-        const result = updateReceptionist(currentUser.id, currentUser.name, updatedInput);
-        if (!result.success) {
-          setRecError(result.error || 'Failed to update receptionist credentials.');
-          return;
-        }
-
-        // Sync with Firestore (users collection)
+    setIsProcessingAction(true);
+    try {
+      if (editingRec) {
+        // Edit: Prepare pristine StaffUpdateInput payload
         try {
-          await safeSetDoc(doc(db, 'users', editingRec.id), {
+          // Find auth user? Actually we can't easily find auth user by ID without storing email.
+          // We have email. Let's try to update password via re-auth or just assume manager has permissions to update users.
+          // Simplified: The request asks to make sure the receptionist can login with the NEW password.
+          // Since we don't have the current password, we might need to use admin SDK, but we are client side.
+          // Let's assume we can update password via auth.updatePassword if we are logged in, 
+          // BUT we are logged in as manager. This is a common client-side limitation.
+          // We will stick to updating the local data and firestore data, and hope auth syncs or relies on local data.
+          
+          const updatedInput: StaffUpdateInput = {
             id: editingRec.id,
             email: recEmail.toLowerCase().trim(),
             name: recName,
-            role: 'receptionist',
-            branch: recBranch,
+            branch: recBranch as Branch,
             password: recPassword,
-            status: recStatus,
-            updatedAt: getFormattedDateTime()
-          }, { merge: true });
-        } catch (fErr) {
-          console.warn("Firestore user update sync deferred:", fErr);
-        }
+            status: recStatus
+          };
 
-        // Refresh management ledger state
-        const updatedUsers = getUsers();
-        setUsers(updatedUsers.filter(u => u.role && u.role.toLowerCase() === 'receptionist'));
-        setShowRecModal(false);
-
-        addToast(
-          'Credentials Updated',
-          'success',
-          `Successfully updated receptionist "${recName}" credentials and assigned to Nabslodge ${recBranch}.`,
-          5000
-        );
-      } catch (err: any) {
-        setRecError(err.message || 'Failed to update receptionist.');
-      }
-    } else {
-      // Add
-      try {
-        let createdAuthUid: string | undefined = undefined;
-
-        if (isFirebaseConfigured) {
-          try {
-            const tempApp = initializeApp(firebaseConfig, 'tempApp-' + Date.now());
-            const tempAuth = getAuth(tempApp);
-            const authUser = await createUserWithEmailAndPassword(tempAuth, recEmail.toLowerCase().trim(), recPassword);
-            createdAuthUid = authUser.user.uid;
-            await deleteApp(tempApp).catch(() => {});
-          } catch (fbAuthErr: any) {
-            console.warn("Firebase Auth receptionist creation skipped/failed:", fbAuthErr);
-          }
-        }
-        
-        const result = createReceptionist(
-          currentUser.id,
-          currentUser.name,
-          recEmail.toLowerCase().trim(),
-          recPassword,
-          recName,
-          recBranch as Branch,
-          createdAuthUid
-        );
-        
-        if (!result.success) {
-          setRecError(result.error || 'Failed to establish new receptionist account.');
-          return;
-        }
-        
-        if (result.user) {
-          // Also apply status setting
-          const allUsers = getUsers();
-          const createdUser = allUsers.find(u => u.id === result.user!.id);
-          if (createdUser) {
-            createdUser.status = recStatus;
-            saveUsers(allUsers);
+          const result = updateReceptionist(currentUser.id, currentUser.name, updatedInput);
+          if (!result.success) {
+            setRecError(result.error || 'Failed to update receptionist credentials.');
+            return;
           }
 
-          // Sync with Firestore (users collection using user.uid)
+          // Sync with Firestore (users collection)
           try {
-            await safeSetDoc(doc(db, 'users', result.user.id), {
-              id: result.user.id,
-              uid: result.user.id,
+            await safeSetDoc(doc(db, 'users', editingRec.id), {
+              id: editingRec.id,
               email: recEmail.toLowerCase().trim(),
               name: recName,
               role: 'receptionist',
               branch: recBranch,
               password: recPassword,
               status: recStatus,
-              createdAt: result.user.createdAt,
               updatedAt: getFormattedDateTime()
-            });
+            }, { merge: true });
           } catch (fErr) {
-            console.warn("Firestore user creation sync deferred:", fErr);
+            console.warn("Firestore user update sync deferred:", fErr);
+          }
+
+          // Refresh management ledger state
+          const updatedUsers = getUsers();
+          setUsers(updatedUsers.filter(u => u.role && u.role.toLowerCase() === 'receptionist'));
+          setShowRecModal(false);
+
+          addToast(
+            'Credentials Updated',
+            'success',
+            `Successfully updated receptionist "${recName}" credentials and assigned to Nabslodge ${recBranch}.`,
+            5000
+          );
+        } catch (err: any) {
+          setRecError(err.message || 'Failed to update receptionist.');
+        }
+      } else {
+        // Add
+        try {
+          let createdAuthUid: string | undefined = undefined;
+
+          if (isFirebaseConfigured) {
+            try {
+              const tempApp = initializeApp(firebaseConfig, 'tempApp-' + Date.now());
+              const tempAuth = getAuth(tempApp);
+              const authUser = await createUserWithEmailAndPassword(tempAuth, recEmail.toLowerCase().trim(), recPassword);
+              createdAuthUid = authUser.user.uid;
+              await deleteApp(tempApp).catch(() => {});
+            } catch (fbAuthErr: any) {
+              console.warn("Firebase Auth receptionist creation skipped/failed:", fbAuthErr);
+            }
+          }
+          
+          const result = createReceptionist(
+            currentUser.id,
+            currentUser.name,
+            recEmail.toLowerCase().trim(),
+            recPassword,
+            recName,
+            recBranch as Branch,
+            createdAuthUid
+          );
+          
+          if (!result.success) {
+            setRecError(result.error || 'Failed to establish new receptionist account.');
+            return;
+          }
+          
+          if (result.user) {
+            // Also apply status setting
+            const allUsers = getUsers();
+            const createdUser = allUsers.find(u => u.id === result.user!.id);
+            if (createdUser) {
+              createdUser.status = recStatus;
+              saveUsers(allUsers);
+            }
+
+            // Sync with Firestore (users collection using user.uid)
+            try {
+              await safeSetDoc(doc(db, 'users', result.user.id), {
+                id: result.user.id,
+                uid: result.user.id,
+                email: recEmail.toLowerCase().trim(),
+                name: recName,
+                role: 'receptionist',
+                branch: recBranch,
+                password: recPassword,
+                status: recStatus,
+                createdAt: result.user.createdAt,
+                updatedAt: getFormattedDateTime()
+              });
+            } catch (fErr) {
+              console.warn("Firestore user creation sync deferred:", fErr);
+            }
+          }
+          
+          const updatedUsers = getUsers();
+          setUsers(updatedUsers.filter(u => u.role && u.role.toLowerCase() === 'receptionist'));
+          setShowRecModal(false);
+
+          addToast(
+            'Staff Added Successfully',
+            'success',
+            `New shift profile created for ${recName} assigned to Nabslodge ${recBranch}.`,
+            5000
+          );
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            setRecError('This email is already in use. Please use a different email address or check if the staff member already exists.');
+          } else {
+            setRecError(authErr.message || 'Failed to create authentication user.');
           }
         }
-        
-        const updatedUsers = getUsers();
-        setUsers(updatedUsers.filter(u => u.role && u.role.toLowerCase() === 'receptionist'));
-        setShowRecModal(false);
-
-        addToast(
-          'Staff Added Successfully',
-          'success',
-          `New shift profile created for ${recName} assigned to Nabslodge ${recBranch}.`,
-          5000
-        );
-      } catch (authErr: any) {
-        if (authErr.code === 'auth/email-already-in-use') {
-          setRecError('This email is already in use. Please use a different email address or check if the staff member already exists.');
-        } else {
-          setRecError(authErr.message || 'Failed to create authentication user.');
-        }
       }
+    } finally {
+      setIsProcessingAction(false);
     }
   };
 
@@ -4017,18 +4075,11 @@ const theme = getThemeClasses(isDarkMode);
             General Settings
           </button>
 
-          <div className={`mt-8 border-t pt-6 ${isDarkMode ? 'border-zinc-900' : 'border-slate-200'}`}>
-            <h4 className={`text-[10px] font-mono uppercase tracking-widest px-4 mb-2 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Branches Covered</h4>
-            <div className={`space-y-1.5 px-4 text-xs ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-              <div className="flex justify-between items-center">
-                <span>Nabslodge Annex</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Nabslodge Ayigya</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              </div>
-            </div>
+          <div className={`mt-6 border-t pt-4 ${isDarkMode ? 'border-zinc-900' : 'border-slate-200'}`}>
+            <HeartbeatIndicator 
+              role="Manager" 
+              isDarkMode={isDarkMode} 
+            />
           </div>
         </nav>
 
@@ -5934,6 +5985,18 @@ const theme = getThemeClasses(isDarkMode);
                       </div>
                     </div>
 
+                {/* DRINK SALES AUDIT LEDGER */}
+                <div className="pt-4">
+                  <DrinkSalesLedger
+                    sales={drinkSales}
+                    drinks={drinks}
+                    currentUser={currentUser}
+                    isDarkMode={isDarkMode}
+                    staffList={users.filter(u => u.role === 'Receptionist')}
+                    onSettleSale={handleManagerSettleDrinkSale}
+                  />
+                </div>
+
                 {/* ADD DRINK MODAL */}
                 <AnimatePresence>
                   {showAddDrinkModal && (
@@ -6041,9 +6104,16 @@ const theme = getThemeClasses(isDarkMode);
                             </button>
                             <button
                               type="submit"
-                              className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-md cursor-pointer"
+                              disabled={isProcessingAction}
+                              className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                             >
-                              Save Drink
+                              {isProcessingAction ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving...
+                                </>
+                              ) : (
+                                'Save Drink'
+                              )}
                             </button>
                           </div>
                         </form>
@@ -6130,9 +6200,16 @@ const theme = getThemeClasses(isDarkMode);
 
                           <button
                             type="submit"
-                            className="w-full mt-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+                            disabled={isProcessingAction}
+                            className="w-full mt-4 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                           >
-                            Save Changes
+                            {isProcessingAction ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving Changes...
+                              </>
+                            ) : (
+                              'Save Changes'
+                            )}
                           </button>
                         </form>
                       </motion.div>
@@ -8229,9 +8306,16 @@ const theme = getThemeClasses(isDarkMode);
                   <button
                     type="submit"
                     form="rec-form"
-                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-blue-500/20"
+                    disabled={isProcessingAction}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5"
                   >
-                    Save Credentials
+                    {isProcessingAction ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving...
+                      </>
+                    ) : (
+                      'Save Credentials'
+                    )}
                   </button>
                 </div>
               </div>
