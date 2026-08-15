@@ -5993,7 +5993,6 @@ const theme = getThemeClasses(isDarkMode);
                     currentUser={currentUser}
                     isDarkMode={isDarkMode}
                     staffList={users.filter(u => u.role === 'Receptionist')}
-                    onSettleSale={handleManagerSettleDrinkSale}
                   />
                 </div>
 

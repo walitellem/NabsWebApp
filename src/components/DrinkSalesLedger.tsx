@@ -845,8 +845,8 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* Settle Unpaid Bill Button */}
-                          {isUnpaid && (
+                          {/* Settle Unpaid Bill Button (Visible in Receptionist Session ONLY) */}
+                          {!isManager && isUnpaid && (
                             <button
                               type="button"
                               onClick={() => {
@@ -971,27 +971,39 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
                   </h4>
                   <div className="space-y-1.5">
                     {selectedSaleForDetails.items && selectedSaleForDetails.items.length > 0 ? (
-                      selectedSaleForDetails.items.map((item, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`flex justify-between items-center p-2.5 rounded-xl border ${
-                            isDarkMode ? 'bg-zinc-900/30 border-zinc-800' : 'bg-slate-50 border-slate-200'
-                          }`}
-                        >
-                          <div>
-                            <span className="font-bold">{item.drinkName}</span>
-                            <div className="text-[10px] text-zinc-400">Qty: {item.quantity} × GH₵{item.unitPrice.toFixed(2)}</div>
+                      selectedSaleForDetails.items.map((item, idx) => {
+                        // Resilient check: if there is only 1 item in the items array and the top-level quantity/price were updated, stay in sync
+                        const isSingleItem = selectedSaleForDetails.items!.length === 1;
+                        const displayQty = (isSingleItem && selectedSaleForDetails.quantity && selectedSaleForDetails.quantity !== item.quantity)
+                          ? selectedSaleForDetails.quantity
+                          : (item.quantity || 1);
+                        const displayUnitPrice = item.unitPrice || selectedSaleForDetails.unitPrice || 0;
+                        const displaySubtotal = (isSingleItem && selectedSaleForDetails.totalPrice)
+                          ? selectedSaleForDetails.totalPrice
+                          : (item.subtotal || (displayQty * displayUnitPrice));
+
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`flex justify-between items-center p-2.5 rounded-xl border ${
+                              isDarkMode ? 'bg-zinc-900/30 border-zinc-800' : 'bg-slate-50 border-slate-200'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-bold">{item.drinkName || selectedSaleForDetails.drinkName}</span>
+                              <div className="text-[10px] text-zinc-400">Qty: {displayQty} × GH₵{displayUnitPrice.toFixed(2)}</div>
+                            </div>
+                            <span className="font-mono font-bold text-purple-400">GH₵{displaySubtotal.toFixed(2)}</span>
                           </div>
-                          <span className="font-mono font-bold text-purple-400">GH₵{item.subtotal.toFixed(2)}</span>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className={`flex justify-between items-center p-2.5 rounded-xl border ${
                         isDarkMode ? 'bg-zinc-900/30 border-zinc-800' : 'bg-slate-50 border-slate-200'
                       }`}>
                         <div>
                           <span className="font-bold">{selectedSaleForDetails.drinkName}</span>
-                          <div className="text-[10px] text-zinc-400">Qty: {selectedSaleForDetails.quantity}</div>
+                          <div className="text-[10px] text-zinc-400">Qty: {selectedSaleForDetails.quantity || 1}</div>
                         </div>
                         <span className="font-mono font-bold text-purple-400">
                           GH₵{selectedSaleForDetails.totalPrice.toFixed(2)}

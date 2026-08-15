@@ -2133,8 +2133,17 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         newBookingId = activeBooking ? activeBooking.id : undefined;
       }
 
+      const updatedItems = [{
+        drinkId: editDrinkSaleDrinkId || saleToEdit.drinkId || '',
+        drinkName,
+        quantity: qtyNum,
+        unitPrice,
+        subtotal: totalPrice
+      }];
+
       const updatedSale: DrinkSale = {
         ...saleToEdit,
+        items: updatedItems,
         drinkId: editDrinkSaleDrinkId || saleToEdit.drinkId,
         drinkName,
         unitPrice,
