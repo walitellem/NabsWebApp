@@ -259,7 +259,7 @@ interface ManagerDashboardProps {
   onOpenTutorial?: () => void;
 }
 
-type TabType = 'overview' | 'receptionists' | 'rooms' | 'bookings' | 'settings' | 'financials' | 'activityCatalog' | 'drinksManagement' | 'pendingEdits' | 'availabilityCalendar' | 'liveAvailableRooms';
+type TabType = 'overview' | 'receptionists' | 'staffDirectory' | 'rooms' | 'bookings' | 'settings' | 'financials' | 'activityCatalog' | 'drinksManagement' | 'pendingEdits' | 'availabilityCalendar' | 'liveAvailableRooms';
 
 export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTheme, onOpenTutorial }: ManagerDashboardProps) {
   const { withLoading } = useLoading();
@@ -7164,7 +7164,7 @@ const theme = getThemeClasses(isDarkMode);
                       (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
                     );
                     if (hasActiveCheckedIn) return 'Occupied';
-                    if (r.status === 'Occupied') return 'Available';
+                    if (r.status === 'Occupied') return 'Occupied';
                     return r.status || 'Available';
                   };
 

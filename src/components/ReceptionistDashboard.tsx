@@ -16,7 +16,7 @@ import {
 import { sendActivityInvoiceViaGmail, parseSafeDate } from '../utils/formatters';
 import { 
   LogOut, UserPlus, Wrench, Plus,  Bed, Calendar, Phone, CheckCircle, Clock, Grid, Filter, 
-  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, Wine, Building2, Globe, HelpCircle
+  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, ArrowRight, Wine, Building2, Globe, HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLoading } from './LoadingContext';
@@ -30,6 +30,7 @@ import { FutureStayCalendar } from './FutureStayCalendar';
 import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
 import { WalkInActivityLedger } from './WalkInActivityLedger';
 import { EditBookingModal } from './EditBookingModal';
+import { TransferRoomModal } from './TransferRoomModal';
 import { EmptyState } from './EmptyState';
 import { HeartbeatIndicator } from './HeartbeatIndicator';
 import { DrinkSalesLedger } from './DrinkSalesLedger';
@@ -469,28 +470,11 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         (b.branch === r.branch || !b.branch || b.branch === branch)
       );
       const isOccupied = !!activeBooking;
-      return { ...r, status: isOccupied ? 'Occupied' : (r.status === 'Occupied' ? 'Available' : r.status) };
+      return { ...r, status: isOccupied ? 'Occupied' : r.status };
     });
   }, [rooms, bookings, branch]);
 
-  // Real-time ground truth auto-healing effect for room status in Firestore & state
-  useEffect(() => {
-    if (!rooms || rooms.length === 0 || !bookings) return;
-    
-    rooms.forEach(r => {
-      const hasActiveCheckedIn = bookings.some(b => 
-        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
-        (b.branch === r.branch || !b.branch) && 
-        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-      );
-
-      if (hasActiveCheckedIn && r.status !== 'Occupied') {
-        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
-      } else if (!hasActiveCheckedIn && r.status === 'Occupied') {
-        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available' }, { merge: true }).catch(() => {});
-      }
-    });
-  }, [rooms, bookings]);
+  // Removed auto-healing effect as it was incorrectly overriding manual status.
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -1221,6 +1205,10 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   // Edit / Rectify Booking state
   const [showEditBookingModal, setShowEditBookingModal] = useState(false);
   const [editingBookingTarget, setEditingBookingTarget] = useState<Booking | null>(null);
+
+  // Transfer Room state
+  const [showTransferRoomModal, setShowTransferRoomModal] = useState(false);
+  const [transferBookingTarget, setTransferBookingTarget] = useState<Booking | null>(null);
 
   const getModalNights = () => {
     if (!futureCheckIn || !futureCheckOut) return 0;
@@ -4010,14 +3998,24 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   };
 
   const getRoomEffectiveStatus = (room: Room): RoomStatus => {
-    const activeBooking = bookings.find(b => 
-      (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-      (b.status === 'CheckedIn' || b.status === 'checked_in') && 
-      (b.branch === room.branch || !b.branch || b.branch === branch)
-    );
+    const normalizedRoomId = String(room.id || '').trim().toLowerCase();
+    const normalizedRoomNum = String(room.roomNumber || '').trim().toLowerCase();
+
+    const activeBooking = bookings.find(b => {
+      const isActive = b.status === 'CheckedIn' || b.status === 'checked_in';
+      const isSameBranch = b.branch === room.branch || !b.branch || b.branch === branch;
+      
+      if (!isActive || !isSameBranch) return false;
+
+      const bookedRoomIds = String(b.roomId || '').split(',').map(r => r.trim().toLowerCase()).filter(r => r !== '');
+      const bookedRoomNums = String(b.roomNumber || '').split(',').map(r => r.trim().toLowerCase()).filter(r => r !== '');
+
+      return bookedRoomIds.includes(normalizedRoomId) || bookedRoomNums.includes(normalizedRoomNum);
+    });
+
     if (activeBooking) return 'Occupied';
-    // If it's marked as Occupied but no active booking exists, it's actually Available (or whatever status it was supposed to be)
-    if (room.status === 'Occupied') return 'Available';
+    // If it's marked as Occupied, keep it marked as Occupied.
+    if (room.status === 'Occupied') return 'Occupied';
     return room.status;
   };
 
@@ -5365,6 +5363,18 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                                               <Edit2 className="w-3 h-3" /> Edit / Rectify
                                             </button>
                                             <button
+                                              onClick={() => {
+                                                if (activeBooking) {
+                                                  setTransferBookingTarget(activeBooking);
+                                                  setShowTransferRoomModal(true);
+                                                }
+                                              }}
+                                              className="px-2 py-1 border border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500 hover:text-white font-bold rounded-lg text-[10px] cursor-pointer flex items-center gap-1"
+                                              title="Transfer guest to a different room"
+                                            >
+                                              <ArrowRight className="w-3 h-3" /> Transfer
+                                            </button>
+                                            <button
                                               onClick={() => handleOpenInvoice(room)}
                                               className="px-2.5 py-1 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-bold text-blue-500 dark:text-blue-400 cursor-pointer"
                                             >
@@ -5672,7 +5682,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                                 )}
 
                                 {effectiveStatus === 'Occupied' && (
-                                  <div className="grid grid-cols-2 gap-2">
+                                  <div className="grid grid-cols-3 gap-2">
                                     <button
                                       onClick={() => {
                                         if (activeBooking) {
@@ -5685,9 +5695,25 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                                           ? 'bg-zinc-950 hover:bg-amber-500 hover:text-zinc-950 border-zinc-800 hover:border-amber-500 text-amber-400' 
                                           : 'bg-white hover:bg-amber-600 hover:text-white border-slate-200 hover:border-amber-600 text-amber-700 shadow-xs'
                                       }`}
-                                      title="Edit guest details or request stay/price modification"
+                                      title="Edit details"
                                     >
-                                      <Edit2 className="w-3.5 h-3.5" /> Edit / Rectify
+                                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (activeBooking) {
+                                          setTransferBookingTarget(activeBooking);
+                                          setShowTransferRoomModal(true);
+                                        }
+                                      }}
+                                      className={`py-2 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                        isDarkMode 
+                                          ? 'bg-zinc-950 hover:bg-purple-500 hover:text-zinc-950 border-zinc-800 hover:border-purple-500 text-purple-400' 
+                                          : 'bg-white hover:bg-purple-600 hover:text-white border-slate-200 hover:border-purple-600 text-purple-700 shadow-xs'
+                                      }`}
+                                      title="Transfer to another room"
+                                    >
+                                      <ArrowRight className="w-3.5 h-3.5" /> Move
                                     </button>
                                     <button
                                       onClick={() => handleOpenInvoice(room)}
@@ -5697,7 +5723,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                                           : 'bg-white hover:bg-blue-600 hover:text-white border-slate-200 hover:border-blue-600 text-slate-700 shadow-xs'
                                       }`}
                                     >
-                                      <UserMinus className="w-3.5 h-3.5" /> Check Out
+                                      <UserMinus className="w-3.5 h-3.5" /> Out
                                     </button>
                                   </div>
                                 )}
@@ -10553,6 +10579,24 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
           onSuccess={() => {
             const updated = getBookings().filter(b => b.branch === branch);
             setBookings(updated);
+          }}
+        />
+      )}
+
+      {/* Transfer Room Modal */}
+      {showTransferRoomModal && transferBookingTarget && (
+        <TransferRoomModal
+          booking={transferBookingTarget}
+          rooms={rooms}
+          isDarkMode={isDarkMode}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowTransferRoomModal(false);
+            setTransferBookingTarget(null);
+          }}
+          onSuccess={() => {
+            setShowTransferRoomModal(false);
+            setTransferBookingTarget(null);
           }}
         />
       )}

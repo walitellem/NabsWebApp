@@ -126,6 +126,33 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
       return;
     }
 
+    // Validate Date Overlap for the new dates against all other active bookings
+    const proposedEnd = checkOutDate.split('T')[0];
+    const proposedStart = checkInDate.split('T')[0];
+    const allBookings = getBookings();
+    
+    const hasConflict = allBookings.some(b => {
+      if (b.id === booking.id) return false;
+      // Ignore inactive bookings
+      if (b.status === 'Cancelled' || b.status === 'No Show' || b.status === 'CheckedOut' || b.status === 'checked_out') return false;
+      
+      // Check if it's the target room
+      const isSameRoom = b.roomId === proposedRoom.id || String(b.roomNumber) === String(proposedRoom.roomNumber);
+      if (!isSameRoom) return false;
+
+      const existStartStr = b.checkInDate ? b.checkInDate.split('T')[0] : '';
+      const existEndStr = b.checkOutDate ? b.checkOutDate.split('T')[0] : '';
+      if (!existStartStr || !existEndStr) return false;
+
+      // Overlap condition: Proposed start is before existing end AND proposed end is after existing start
+      return (proposedStart < existEndStr) && (proposedEnd > existStartStr);
+    });
+
+    if (hasConflict) {
+      addToast("Date Conflict Detected", "error", `Cannot extend/modify dates. Room ${proposedRoom.roomNumber} is already reserved during this new period.`, 5000);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {

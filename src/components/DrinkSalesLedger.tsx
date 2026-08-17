@@ -63,7 +63,10 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
   // 1. Search Query (Guest Name, Room, Drink Name, Serial, Staff)
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 2. Payment Status Filter: 'all' | 'paid' | 'unpaid'
+  // 2. Order Type Filter
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'room' | 'walk_in'>('all');
+
+  // 3. Payment Status Filter: 'all' | 'paid' | 'unpaid'
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
 
   // 3. Shift / Issuer Scope Filter
@@ -210,20 +213,30 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
         return false;
       }
 
-      // 5. Search Query Filter (Guest Name, Room, Drink Item, Serial, Receptionist Name)
+      // 4.5 Order Type Filter
+      if (orderTypeFilter === 'room') {
+        if (!sale.roomNumber || sale.roomNumber.trim() === '') return false;
+      } else if (orderTypeFilter === 'walk_in') {
+        if (sale.roomNumber && sale.roomNumber.trim() !== '') return false;
+      }
+
+      // 5. Search Query Filter (Guest Name, Room, Drink Item, Serial, Receptionist, Phone, Payment)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const guestMatch = (sale.guestName || '').toLowerCase().includes(q);
         const roomMatch = (sale.roomNumber || '').toLowerCase().includes(q);
         const serialMatch = (sale.serialNumber || sale.id || '').toLowerCase().includes(q);
         const staffMatch = (sale.receptionistName || '').toLowerCase().includes(q);
+        const phoneMatch = (sale.guestPhone || '').toLowerCase().includes(q);
+        const statusMatch = (sale.paymentStatus || '').toLowerCase().includes(q);
+        const methodMatch = (sale.paymentMethod || '').toLowerCase().includes(q);
         
         let itemMatch = (sale.drinkName || '').toLowerCase().includes(q);
         if (sale.items && sale.items.length > 0) {
           itemMatch = itemMatch || sale.items.some(i => (i.drinkName || '').toLowerCase().includes(q));
         }
 
-        if (!guestMatch && !roomMatch && !serialMatch && !staffMatch && !itemMatch) {
+        if (!guestMatch && !roomMatch && !serialMatch && !staffMatch && !phoneMatch && !statusMatch && !methodMatch && !itemMatch) {
           return false;
         }
       }
@@ -242,6 +255,7 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
     managerStaffFilter, 
     receptionistShiftFilter, 
     currentUser, 
+    orderTypeFilter,
     paymentStatusFilter, 
     datePreset, 
     customStartDate, 
@@ -528,21 +542,57 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
             </div>
           </div>
 
-          {/* Row 2: Payment Status Chips & Date Presets */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-2">
-            {/* Status Filter Tabs */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setPaymentStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  paymentStatusFilter === 'all'
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-xs'
-                    : isDarkMode ? 'bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                All Orders ({sales.length})
-              </button>
-              <button
+          {/* Row 2: Type Filters & Payment Status Chips & Date Presets */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pt-2">
+            
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Order Type Filter Tabs */}
+              <div className={`flex items-center p-1 rounded-xl border ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-slate-100/50 border-slate-200'}`}>
+                <button
+                  onClick={() => setOrderTypeFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    orderTypeFilter === 'all'
+                      ? (isDarkMode ? 'bg-zinc-800 text-white shadow-xs' : 'bg-white text-slate-800 shadow-xs')
+                      : (isDarkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700')
+                  }`}
+                >
+                  All Types
+                </button>
+                <button
+                  onClick={() => setOrderTypeFilter('room')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    orderTypeFilter === 'room'
+                      ? (isDarkMode ? 'bg-purple-900/50 text-purple-300 shadow-xs' : 'bg-purple-100 text-purple-800 shadow-xs')
+                      : (isDarkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700')
+                  }`}
+                >
+                  🏨 Room Assigned
+                </button>
+                <button
+                  onClick={() => setOrderTypeFilter('walk_in')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    orderTypeFilter === 'walk_in'
+                      ? (isDarkMode ? 'bg-blue-900/50 text-blue-300 shadow-xs' : 'bg-blue-100 text-blue-800 shadow-xs')
+                      : (isDarkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700')
+                  }`}
+                >
+                  🍸 Walk-In / Bar
+                </button>
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setPaymentStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    paymentStatusFilter === 'all'
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-xs'
+                      : isDarkMode ? 'bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All Statuses
+                </button>
+                <button
                 onClick={() => setPaymentStatusFilter('paid')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   paymentStatusFilter === 'paid'
@@ -569,6 +619,7 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
                   </span>
                 )}
               </button>
+            </div>
             </div>
 
             {/* Date Preset Buttons */}
@@ -673,12 +724,27 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
               {filteredSales.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-zinc-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Wine className="w-8 h-8 opacity-30 text-purple-500 animate-pulse" />
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Wine className="w-10 h-10 opacity-20 text-purple-500" />
                       <span className="text-sm font-semibold">No drink sales found matching active filters.</span>
-                      <p className="text-xs text-zinc-500 max-w-sm">
-                        {searchQuery ? `No results for "${searchQuery}". Try clearing search keywords or selecting a broader date range.` : 'No transactions recorded under this filter criteria.'}
+                      <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        {searchQuery 
+                          ? `No results for "${searchQuery}". Ensure you are searching the correct shift or branch. You may need to click "All Types" or "All Statuses" to find what you are looking for.` 
+                          : 'No transactions recorded under this specific criteria.'}
                       </p>
+                      {searchQuery && (
+                        <button
+                          onClick={() => {
+                            setOrderTypeFilter('all');
+                            setPaymentStatusFilter('all');
+                            setDatePreset('all_time');
+                            if (!isManager) setReceptionistShiftFilter('all_branch');
+                          }}
+                          className="px-4 py-2 mt-2 text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded-xl hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          Clear Filters & Find "{searchQuery}"
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

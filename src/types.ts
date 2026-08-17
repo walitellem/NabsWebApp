@@ -139,6 +139,14 @@ export interface DrinkItem {
   createdAt?: string;
 }
 
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+  branch: string;
+  createdAt: string;
+}
+
 export interface DrinkSaleItem {
   drinkId: string;
   drinkName: string;
@@ -169,6 +177,9 @@ export interface DrinkSale {
   splitPaidMethod?: 'Cash' | 'Mobile Money';
   paymentStatus: 'Paid' | 'Unpaid' | 'Split';
   settledPaymentMethod?: 'Cash' | 'Mobile Money';
+  customerType?: 'room' | 'walk-in' | 'staff';
+  staffId?: string;
+  staffName?: string;
   bookingId?: string;
   receptionistId: string;
   receptionistName: string;
