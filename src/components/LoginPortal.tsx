@@ -46,8 +46,14 @@ export function LoginPortal({ onLoginSuccess, onForbidden, isDarkMode, onToggleT
     if (user.role === 'Manager') return true;
 
     const activeIp = (useSimulation ? simulatedIp : detectedIp).trim();
-    const settingsStr = localStorage.getItem('globalSettings_local');
-    const settings = settingsStr ? JSON.parse(settingsStr) : {};
+    let settings: any = {};
+    try {
+      const settingsStr = localStorage.getItem('globalSettings_local');
+      settings = settingsStr ? JSON.parse(settingsStr) : {};
+      if (typeof settings !== 'object' || settings === null) settings = {};
+    } catch (e) {
+      settings = {};
+    }
     
     if (settings.enforceIpRestrictions !== true) return true;
 

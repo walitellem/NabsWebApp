@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { NabsLodgeLogo } from './NabsLodgeLogo';
 import { db } from '../firebase';
 import { doc, setDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { Zap, Plus, Search, Calendar, Filter, Printer, Download, Mail, CheckCircle2, User, Phone, DollarSign, Clock, Receipt } from 'lucide-react';
+import { Zap, Plus, Search, Calendar, Filter, Printer, Download, Mail, CheckCircle2, User, Phone, DollarSign, Clock, Receipt, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { sendActivityInvoiceViaGmail, parseSafeDate } from '../utils/formatters';
 import { useToast } from './ToastContext';
 import html2canvas from 'html2canvas';
@@ -645,23 +646,41 @@ export const WalkInActivityLedger: React.FC<WalkInActivityLedgerProps> = ({
       </div>
 
       {/* New Walk-In Activity Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
-            <div className={`px-6 py-4 border-b flex items-center justify-between shrink-0 ${isDarkMode ? 'border-zinc-800 bg-zinc-900/80' : 'border-slate-200 bg-slate-50'}`}>
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-amber-500" />
-                <h3 className="font-bold text-sm">Log New Walk-In Activity</h3>
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`relative w-full max-w-lg max-h-[92vh] flex flex-col rounded-[2rem] border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+            >
+              <div className={`px-6 py-5 border-b flex items-center justify-between shrink-0 ${isDarkMode ? 'border-zinc-800 bg-zinc-900/80' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-base">Log New Walk-In Activity</h3>
+                </div>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className={`p-2 rounded-full transition-colors ${
+                    isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-zinc-400 hover:text-zinc-100 text-sm font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            <form onSubmit={handleSaveActivity} className="flex-1 flex flex-col overflow-hidden">
+              <form onSubmit={handleSaveActivity} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin">
               <div>
                 <label className={`block text-[10px] font-mono uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
@@ -820,20 +839,35 @@ export const WalkInActivityLedger: React.FC<WalkInActivityLedgerProps> = ({
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+    </AnimatePresence>
 
       {/* Unified Receipt/Invoice Modal (Mirrors primary room booking invoice template) */}
-      {showReceiptModal && generatedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-2xl my-8">
-            <div
-              id="walkin-receipt-card"
-              className={`p-8 rounded-3xl border shadow-2xl relative ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-white border-slate-300 text-slate-900'
-              }`}
+      <AnimatePresence>
+        {showReceiptModal && generatedReceipt && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowReceiptModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-2xl my-8 overflow-y-auto max-h-[95vh] scrollbar-thin"
             >
+              <div
+                id="walkin-receipt-card"
+                className={`p-8 rounded-[2rem] border shadow-2xl relative ${
+                  isDarkMode ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-white border-slate-300 text-slate-900'
+                }`}
+              >
               <div className="flex items-start justify-between pb-6 border-b border-zinc-200 dark:border-zinc-800">
                 <table style={{ border: 'none', marginBottom: '16px' }}>
       <tbody>
@@ -930,9 +964,10 @@ export const WalkInActivityLedger: React.FC<WalkInActivityLedgerProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
+    </AnimatePresence>
 
       {/* Footer Engineering Signature */}
       <div className="pt-8 pb-4 text-center border-t border-zinc-200 dark:border-zinc-800">

@@ -27,6 +27,7 @@ import { useToast } from './ToastContext';
 import { useLoading } from './LoadingContext';
 import { validateRevenueIntegrity, RevenueAnomaly } from '../utils/revenueValidator';
 import { BestSellingDrinks } from './BestSellingDrinks';
+import { StaffManagementModal } from './StaffManagementModal';
 import { DateRangePicker } from './DateRangePicker';
 import { WalkInActivityLedger } from './WalkInActivityLedger';
 import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
@@ -454,6 +455,7 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
   const [activeFinancialTab, setActiveFinancialTab] = useState<'handover' | 'monthly' | 'annual' | null>(null);
   const [activeActivityTab, setActiveActivityTab] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
 
   // Manager Availability & Live Rooms Filter States
   const [managerCalendarBranch, setManagerCalendarBranch] = useState<'ALL' | 'Annex' | 'Ayigya'>('ALL');
@@ -466,7 +468,9 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
   const [pendingEditRequests, setPendingEditRequests] = useState<PendingEditRequest[]>(() => {
     try {
       const local = localStorage.getItem('nabslodge_pending_edits');
-      return local ? JSON.parse(local) : [];
+      if (!local) return [];
+      const parsed = JSON.parse(local);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       return [];
     }
@@ -1246,7 +1250,9 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
   const [activityTransactions, setActivityTransactions] = useState<any[]>(() => {
     try {
       const local = localStorage.getItem('nabslodge_activity_ledger');
-      return local ? JSON.parse(local) : [];
+      if (!local) return [];
+      const parsed = JSON.parse(local);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -1254,7 +1260,9 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
   const [roomRevenue, setRoomRevenue] = useState<any[]>(() => {
     try {
       const local = localStorage.getItem('nabslodge_room_revenues');
-      return local ? JSON.parse(local) : [];
+      if (!local) return [];
+      const parsed = JSON.parse(local);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -1946,13 +1954,15 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     setHandovers(getHandovers());
     try {
       const localRevs = localStorage.getItem('nabslodge_room_revenues');
-      setRoomRevenue(localRevs ? JSON.parse(localRevs) : []);
+      const parsed = localRevs ? JSON.parse(localRevs) : [];
+      setRoomRevenue(Array.isArray(parsed) ? parsed : []);
     } catch (e) {
       console.warn("Failed to load room revenues from localStorage in ManagerDashboard:", e);
     }
     try {
       const localLedger = localStorage.getItem('nabslodge_activity_ledger');
-      setActivityTransactions(localLedger ? JSON.parse(localLedger) : []);
+      const parsed = localLedger ? JSON.parse(localLedger) : [];
+      setActivityTransactions(Array.isArray(parsed) ? parsed : []);
     } catch (e) {
       console.warn("Failed to load activity ledger from localStorage in ManagerDashboard:", e);
     }
@@ -3927,7 +3937,7 @@ const theme = getThemeClasses(isDarkMode);
           </div>
           <div className="px-3 py-2 text-xs font-mono rounded-xl border bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
             <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5 text-zinc-400 dark:text-zinc-500">Admin User</div>
-            <div className="truncate" title={currentUser.name}>{currentUser.name}</div>
+            <div className="truncate" title={currentUser?.name || ''}>{currentUser?.name || 'User'}</div>
           </div>
         </div>
 
@@ -5034,12 +5044,20 @@ const theme = getThemeClasses(isDarkMode);
                     <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">Receptionist Accounts</h2>
                     <p className="text-xs mt-1 text-zinc-600 dark:text-zinc-400">Create and manage access credentials for staff across both Nabslodge branches.</p>
                   </div>
-                  <button
-                    onClick={handleOpenAddRec}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-blue-500/5"
-                  >
-                    <Plus className="w-4 h-4" /> Create Receptionist
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setIsStaffModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-purple-500/5"
+                    >
+                      <Users className="w-4 h-4" /> Manage Staff Directory
+                    </button>
+                    <button
+                      onClick={handleOpenAddRec}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-blue-500/5"
+                    >
+                      <Plus className="w-4 h-4" /> Create Receptionist
+                    </button>
+                  </div>
                 </div>
 
                 <div className={`border rounded-3xl overflow-hidden ${theme.tableContainer}`}>
@@ -8722,7 +8740,7 @@ const theme = getThemeClasses(isDarkMode);
                     setShowSignOutModal(false);
                     onLogout();
                   }}
-                  className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-red-500/20"
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-red-500/20 active:scale-[0.98]"
                 >
                   Confirm Sign Out
                 </button>
@@ -8735,12 +8753,20 @@ const theme = getThemeClasses(isDarkMode);
       {/* --- MANAGER PRINT PREVIEW CONFIRMATION MODAL --- */}
       <AnimatePresence>
         {showPrintPreviewModal && printPreviewConfig && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`border w-full max-w-2xl shadow-2xl rounded-2xl p-6 relative max-h-[92vh] flex flex-col ${
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPrintPreviewModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`relative border w-full max-w-2xl shadow-2xl rounded-[2rem] p-6 relative max-h-[92vh] flex flex-col ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-100' : 'bg-white border-zinc-200 text-zinc-900'
               }`}
             >
@@ -8759,8 +8785,8 @@ const theme = getThemeClasses(isDarkMode);
                 </div>
                 <button
                   onClick={() => setShowPrintPreviewModal(false)}
-                  className={`p-2 rounded-lg transition-all ${
-                    isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-500'
+                  className={`p-2 rounded-full transition-all ${
+                    isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'
                   }`}
                 >
                   <X className="w-5 h-5" />
@@ -9877,6 +9903,8 @@ const theme = getThemeClasses(isDarkMode);
           })()}
         </AnimatePresence>
       </AnimatePresence>
+
+      <StaffManagementModal isOpen={isStaffModalOpen} onClose={() => setIsStaffModalOpen(false)} isDarkMode={isDarkMode} />
 
     </div>
   );

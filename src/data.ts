@@ -16,6 +16,7 @@ const ACTIVITY_CATALOG_KEY = 'nabslodge_activity_catalog';
 const SETTINGS_KEY = 'globalSettings_local';
 const DRINKS_KEY = 'nabslodge_drinks';
 const DRINK_SALES_KEY = 'nabslodge_drink_sales';
+const STAFF_KEY = 'nabslodge_staff';
 
 export const SIX_MONTHS_DAYS = 180; // 6 months retention period
 
@@ -267,32 +268,41 @@ export const getUsers = (): User[] => {
     localStorage.setItem(USERS_KEY, JSON.stringify(initialUsers));
     return initialUsers;
   }
-  let parsed = JSON.parse(data);
-  // Migration for old schema without email
-  let migrated = false;
-  parsed = parsed.map((u: any) => {
-    if (!u.email) {
-      migrated = true;
-      if (u.name === 'Chief Sualah Tellem' || u.id === 'user_mgr_1') {
-        u.email = 'manager@nabslodge.com';
-      } else if (u.name === 'Amara Koffi' || u.branch === 'Annex') {
-        u.email = 'annex_rec@nabslodge.com';
-      } else if (u.name === 'Kwame Mensah' || u.branch === 'Ayigya') {
-        u.email = 'ayigya_rec@nabslodge.com';
-      } else {
-        u.email = 'receptionist@nabslodge.com'; // fallback
+  try {
+    let parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) {
+      console.warn("Corrupted users data in localStorage, resetting to initial.");
+      return initialUsers;
+    }
+    
+    // Migration for old schema without email
+    let migrated = false;
+    parsed = parsed.map((u: any) => {
+      if (!u.email) {
+        migrated = true;
+        if (u.name === 'Chief Sualah Tellem' || u.id === 'user_mgr_1') {
+          u.email = 'manager@nabslodge.com';
+        } else if (u.name === 'Amara Koffi' || u.branch === 'Annex') {
+          u.email = 'annex_rec@nabslodge.com';
+        } else if (u.name === 'Kwame Mensah' || u.branch === 'Ayigya') {
+          u.email = 'ayigya_rec@nabslodge.com';
+        } else {
+          u.email = 'receptionist@nabslodge.com'; // fallback
+        }
       }
+      if (!u.status) {
+        migrated = true;
+        u.status = 'Active';
+      }
+      return u;
+    });
+    if (migrated) {
+      saveUsers(parsed);
     }
-    if (!u.status) {
-      migrated = true;
-      u.status = 'Active';
-    }
-    return u;
-  });
-  if (migrated) {
-    saveUsers(parsed);
+    return parsed;
+  } catch (e) {
+    return initialUsers;
   }
-  return parsed;
 };
 
 function sanitizeForFirestore(data: any): any {
@@ -369,7 +379,12 @@ export const getBookings = (): Booking[] => {
     localStorage.setItem(BOOKINGS_KEY, JSON.stringify(initialBookings));
     return initialBookings;
   }
-  return JSON.parse(data);
+  try {
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : initialBookings;
+  } catch (e) {
+    return initialBookings;
+  }
 };
 
 export const saveBookings = (bookings: Booking[]) => {
@@ -408,28 +423,35 @@ export const getLogs = (): AuditLog[] => {
     localStorage.setItem(LOGS_KEY, JSON.stringify(initialLogs));
     return initialLogs;
   }
-  let parsed: AuditLog[] = JSON.parse(data);
+  
+  try {
+    let parsed: AuditLog[] = JSON.parse(data);
+    if (!Array.isArray(parsed)) return initialLogs;
 
-  // Auto-Purge enforcement for logs older than retention period (6 months / 180 days by default)
-  const settings = getSettings();
-  if (settings.autoPurgeEnabled !== false) {
-    const retentionDays = settings.logRetentionDays || SIX_MONTHS_DAYS;
-    const now = Date.now();
-    const cutoffMs = retentionDays * 24 * 60 * 60 * 1000;
-    const initialCount = parsed.length;
-    parsed = parsed.filter(log => {
-      if (!log.timestamp) return true;
-      const time = new Date(log.timestamp).getTime();
-      if (isNaN(time)) return true;
-      return (now - time) <= cutoffMs;
-    });
-    if (parsed.length < initialCount) {
-      saveLogs(parsed);
+    // Auto-Purge enforcement for logs older than retention period (6 months / 180 days by default)
+    const settings = getSettings();
+    if (settings.autoPurgeEnabled !== false) {
+      const retentionDays = settings.logRetentionDays || SIX_MONTHS_DAYS;
+      const now = Date.now();
+      const cutoffMs = retentionDays * 24 * 60 * 60 * 1000;
+      const initialCount = parsed.length;
+      parsed = parsed.filter(log => {
+        if (!log.timestamp) return true;
+        const time = new Date(log.timestamp).getTime();
+        if (isNaN(time)) return true;
+        return (now - time) <= cutoffMs;
+      });
+      if (parsed.length < initialCount) {
+        saveLogs(parsed);
+      }
     }
-  }
 
-  // Sort descending by timestamp/date representation
-  return parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    // Sort descending by timestamp/date representation
+    return parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (e) {
+    console.error("Error parsing logs from localStorage", e);
+    return initialLogs;
+  }
 };
 
 export const saveLogs = (logs: AuditLog[]) => {
@@ -442,7 +464,8 @@ export const getHandovers = (): HandoverRecord[] => {
     return [];
   }
   try {
-    const parsed: HandoverRecord[] = JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
     return parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (e) {
     return [];
@@ -541,7 +564,8 @@ export const getDrinkSales = (): DrinkSale[] => {
   const data = localStorage.getItem(DRINK_SALES_KEY);
   if (!data) return [];
   try {
-    const parsed: DrinkSale[] = JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
     return parsed.sort((a, b) => safeParseDateTimestamp(b.timestamp) - safeParseDateTimestamp(a.timestamp));
   } catch (e) {
     return [];
@@ -550,6 +574,21 @@ export const getDrinkSales = (): DrinkSale[] => {
 
 export const saveDrinkSales = (sales: DrinkSale[]) => {
   localStorage.setItem(DRINK_SALES_KEY, JSON.stringify(sales));
+};
+
+export const getStaff = (): import('./types').StaffMember[] => {
+  const data = localStorage.getItem(STAFF_KEY);
+  if (!data) return [];
+  try {
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const saveStaff = (staff: import('./types').StaffMember[]) => {
+  localStorage.setItem(STAFF_KEY, JSON.stringify(staff));
 };
 
 export const updateDrinkSale = (sale: DrinkSale): { success: boolean; error?: string } => {

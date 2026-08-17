@@ -199,7 +199,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
             
             <h1 className="text-5xl md:text-7xl font-display font-black tracking-tighter leading-[0.9]">
               {getGreeting()}, <br />
-              <span className="text-amber-500">{currentUser.name}.</span>
+              <span className="text-amber-500">{currentUser?.name || 'User'}.</span>
             </h1>
             
             <p className={`text-lg md:text-xl max-w-xl font-medium leading-relaxed ${

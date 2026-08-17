@@ -225,31 +225,40 @@ export function GettingStartedModal({ isOpen, onClose, currentUser, isDarkMode }
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50 backdrop-blur-sm overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className={`relative w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-300 ${
-            isDarkMode 
-              ? 'bg-zinc-900 border-zinc-800 text-zinc-100' 
-              : 'bg-white border-slate-200 text-slate-800'
-          }`}
-        >
-          {/* Header Banner */}
-          <div className="relative p-6 pb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
-            <button 
-              onClick={handleClose}
-              className={`absolute top-4 right-4 p-1.5 rounded-full transition-colors cursor-pointer ${
-                isDarkMode 
-                  ? 'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200' 
-                  : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
-              }`}
-              title="Close Tutorial"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={handleClose}
+            className="absolute inset-0 bg-black/60 backdrop-blur-md"
+          />
+          
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className={`relative w-full max-w-2xl rounded-[2rem] overflow-hidden shadow-2xl border transition-colors duration-300 ${
+              isDarkMode 
+                ? 'bg-zinc-900 border-zinc-800 text-zinc-100' 
+                : 'bg-white border-slate-200 text-slate-800'
+            }`}
+          >
+            {/* Header Banner */}
+            <div className="relative p-6 pb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
+              <button 
+                onClick={handleClose}
+                className={`absolute top-4 right-4 p-2 rounded-full transition-colors cursor-pointer ${
+                  isDarkMode 
+                    ? 'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200' 
+                    : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                }`}
+                title="Close Tutorial"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
             <div className="flex items-center gap-2 mb-2">
               <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -418,6 +427,7 @@ export function GettingStartedModal({ isOpen, onClose, currentUser, isDarkMode }
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

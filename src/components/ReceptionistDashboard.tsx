@@ -6,17 +6,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { NabsLodgeLogo } from './NabsLodgeLogo';
 import { 
-  User, Room, Booking, AuditLog, Branch, RoomStatus, BookingStatus, PaymentStatus, Role, WalkInActivityInput, HandoverItemBreakdown, DrinkItem, DrinkSale 
+  User, Room, Booking, AuditLog, Branch, RoomStatus, BookingStatus, PaymentStatus, Role, WalkInActivityInput, HandoverItemBreakdown, DrinkItem, DrinkSale, StaffMember, HandoverRecord
 } from '../types';
 import { 
   getRooms, getBookings, getLogs, createBooking, checkoutBooking, updateBookingPayment, addAuditLog, updateRoomStatus, getFormattedDateTime,
-  getActivityCatalog, saveActivityCatalog, getSettings, getUsers, addHandover, cancelBooking, saveRooms, saveBookings,
-  getDrinks, saveDrinks, getDrinkSales, saveDrinkSales, addDrinkSale, updateDrinkSale, deleteDrinkSale
+  getActivityCatalog, saveActivityCatalog, getSettings, getUsers, saveUsers, addHandover, cancelBooking, saveRooms, saveBookings,
+  getDrinks, saveDrinks, getDrinkSales, saveDrinkSales, addDrinkSale, updateDrinkSale, deleteDrinkSale,
+  getStaff, saveStaff
 } from '../data';
 import { sendActivityInvoiceViaGmail, parseSafeDate } from '../utils/formatters';
 import { 
-  LogOut, UserPlus, Wrench, Plus,  Bed, Calendar, Phone, CheckCircle, Clock, Grid, Filter, 
-  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, ArrowRight, Wine, Building2, Globe, HelpCircle
+  LogOut, UserPlus, Wrench, Plus, Bed, Calendar, Phone, CheckCircle, Clock, Grid, Filter, 
+  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, ArrowRight, Wine, Building2, Globe, HelpCircle,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLoading } from './LoadingContext';
@@ -483,7 +485,9 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const [roomRevenues, setRoomRevenues] = useState<any[]>(() => {
     try {
       const local = localStorage.getItem('nabslodge_room_revenues');
-      return local ? JSON.parse(local) : [];
+      if (!local) return [];
+      const parsed = JSON.parse(local);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -491,7 +495,9 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const [walkInTransactions, setWalkInTransactions] = useState<any[]>(() => {
     try {
       const local = localStorage.getItem('nabslodge_activity_ledger');
-      return local ? JSON.parse(local) : [];
+      if (!local) return [];
+      const parsed = JSON.parse(local);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -694,6 +700,33 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const [saleToDelete, setSaleToDelete] = useState<DrinkSale | null>(null);
   const [drinkSplitPaidMethod, setDrinkSplitPaidMethod] = useState<'Cash' | 'Mobile Money'>('Cash');
   const [isProcessingDrinkSale, setIsProcessingDrinkSale] = useState<boolean>(false);
+  const [isStaffOrder, setIsStaffOrder] = useState(false);
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [showStaffDropdown, setShowStaffDropdown] = useState(false);
+  const [drinkCustomerType, setDrinkCustomerType] = useState<'walkin' | 'room' | 'staff'>('walkin');
+
+  // Click outside listener for staff dropdown
+  useEffect(() => {
+    if (showDrinkOrderModal) {
+      loadStaffData();
+    }
+  }, [showDrinkOrderModal]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.staff-search-container')) {
+        setShowStaffDropdown(false);
+      }
+    };
+    if (showStaffDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showStaffDropdown]);
 
   // Sync check-in/check-out dates automatically when monthly package and month are selected
   useEffect(() => {
@@ -1605,6 +1638,37 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   }, []);
 
   // Synchronize local and branch state
+  const [rawStaff, setRawStaff] = useState<StaffMember[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>(getUsers());
+
+  const loadStaffData = useCallback((firestoreStaff?: StaffMember[]) => {
+    if (firestoreStaff) {
+      setRawStaff(firestoreStaff);
+    } else {
+      setRawStaff(getStaff());
+    }
+  }, []);
+
+  const staff = useMemo(() => {
+    const userAsStaff: StaffMember[] = allUsers.map(u => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      branch: u.branch || u.assignedBranch || 'N/A',
+      createdAt: u.createdAt || new Date().toISOString()
+    }));
+
+    const merged = [...rawStaff];
+    userAsStaff.forEach(us => {
+      const exists = merged.find(s => s.id === us.id || s.name === us.name);
+      if (!exists) {
+        merged.push(us);
+      }
+    });
+    
+    return merged;
+  }, [rawStaff, allUsers]);
+
   const refreshData = () => {
     const allRooms = getRooms();
     const branchRooms = allRooms.filter(r => r.branch === branch);
@@ -1622,10 +1686,14 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
     const allDrinkSales = getDrinkSales();
     setDrinkSales(allDrinkSales);
 
+    loadStaffData();
+    setAllUsers(getUsers());
+
     // Refresh room revenues from localStorage
     try {
       const localRevs = localStorage.getItem('nabslodge_room_revenues');
-      const parsedRevs = localRevs ? JSON.parse(localRevs) : [];
+      const parsed = localRevs ? JSON.parse(localRevs) : [];
+      const parsedRevs = Array.isArray(parsed) ? parsed : [];
       const branchRevs = parsedRevs.filter((r: any) => r.branch === branch);
       setRoomRevenues(branchRevs);
     } catch (err) {
@@ -1635,7 +1703,8 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
     // Refresh walk-in transactions from localStorage
     try {
       const localWalkIns = localStorage.getItem('nabslodge_activity_ledger');
-      const parsedWalkIns = localWalkIns ? JSON.parse(localWalkIns) : [];
+      const parsed = localWalkIns ? JSON.parse(localWalkIns) : [];
+      const parsedWalkIns = Array.isArray(parsed) ? parsed : [];
       const branchWalkIns = parsedWalkIns.filter((w: any) => w.branch === branch);
       setWalkInTransactions(branchWalkIns);
     } catch (err) {
@@ -1657,6 +1726,8 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
     let unsubWalkIn: (() => void) | undefined;
     let unsubDrinks: (() => void) | undefined;
     let unsubDrinkSales: (() => void) | undefined;
+    let unsubStaff: (() => void) | undefined;
+    let unsubUsers: (() => void) | undefined;
 
     if (!isFirebaseConfigured) {
       setIsLoadingData(false);
@@ -1726,6 +1797,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         setLogs(fetched);
       }, (err) => {
         console.warn("Firestore logs snapshot listener error:", err);
+        setIsLoadingData(false);
       });
 
       unsubActivity = onSnapshot(collection(db, 'ActivityCatalog'), (snapshot) => {
@@ -1737,6 +1809,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         saveActivityCatalog(catalogData);
       }, (err) => {
         console.warn("Firestore activity catalog snapshot listener error:", err);
+        setIsLoadingData(false);
       });
 
       const roomRevenueQ = query(collection(db, 'RoomRevenue'), where('branch', '==', branch));
@@ -1753,6 +1826,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         }
       }, (err) => {
         console.warn("Firestore room revenues snapshot error:", err);
+        setIsLoadingData(false);
       });
 
       const walkInQ = query(collection(db, 'ActivityLedger'), where('branch', '==', branch));
@@ -1769,6 +1843,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         }
       }, (err) => {
         console.warn("Firestore walk-ins snapshot error:", err);
+        setIsLoadingData(false);
       });
 
       unsubDrinks = onSnapshot(collection(db, 'drinks'), (snapshot) => {
@@ -1780,6 +1855,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         saveDrinks(fetched);
       }, (err) => {
         console.warn("Firestore drinks snapshot error:", err);
+        setIsLoadingData(false);
       });
 
       const drinkSalesQ = query(collection(db, 'drinkSales'), where('branch', '==', branch));
@@ -1792,6 +1868,27 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         saveDrinkSales(fetched);
       }, (err) => {
         console.warn("Firestore drink sales snapshot error:", err);
+        setIsLoadingData(false);
+      });
+
+      const staffQ = query(collection(db, 'staff'));
+      unsubStaff = onSnapshot(staffQ, (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as import('../types').StaffMember));
+        loadStaffData(fetched);
+      }, (err) => {
+        console.warn("Firestore staff snapshot error:", err);
+        setIsLoadingData(false);
+      });
+
+      const usersQ = query(collection(db, 'users'));
+      unsubUsers = onSnapshot(usersQ, (snapshot) => {
+        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as import('../types').User));
+        saveUsers(fetched);
+        setAllUsers(fetched); // Trigger the useMemo to re-merge
+        setIsLoadingData(false);
+      }, (err) => {
+        console.warn("Firestore users snapshot error:", err);
+        setIsLoadingData(false);
       });
     } catch (e) {
       console.warn("Firestore listener init warning:", e);
@@ -1858,6 +1955,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       if (unsubWalkIn) unsubWalkIn();
       if (unsubDrinks) unsubDrinks();
       if (unsubDrinkSales) unsubDrinkSales();
+      if (unsubStaff) unsubStaff();
     };
   }, [currentUser, branch]);
 
@@ -1900,6 +1998,10 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
   const handleProcessDrinkSale = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      addToast('Session Error', 'error', 'You must be logged in to record a sale.');
+      return;
+    }
     if (drinkCart.length === 0) {
       addToast('Validation Error', 'error', 'Please add at least one drink to the order.');
       return;
@@ -1918,8 +2020,11 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         paymentStatus = 'Unpaid';
         paidAmount = 0;
         unpaidAmount = totalPrice;
-        if (!drinkBookingId && !drinkRoomNumber) {
-          addToast('Validation Error', 'error', 'Unpaid drinks must be assigned to an active checked-in guest booking or room.');
+        
+        // Safety check: Valid as long as room, booking, or staff/input is present
+        const isAssigned = drinkBookingId || drinkRoomNumber || (drinkCustomerType === 'staff' && (selectedStaffId || staffSearchQuery.trim()));
+        if (!isAssigned) {
+          addToast('Validation Error', 'error', 'Unpaid drinks must be assigned to an active guest booking, room, or staff member.');
           setIsProcessingDrinkSale(false);
           return;
         }
@@ -1932,8 +2037,11 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
           setIsProcessingDrinkSale(false);
           return;
         }
-        if (unpaidAmount > 0 && !drinkBookingId && !drinkRoomNumber) {
-          addToast('Validation Error', 'error', 'Unpaid portion must be assigned to an active checked-in guest booking or room.');
+        
+        // Safety check for split unpaid portion
+        const isAssigned = drinkBookingId || drinkRoomNumber || (drinkCustomerType === 'staff' && (selectedStaffId || staffSearchQuery.trim()));
+        if (unpaidAmount > 0 && !isAssigned) {
+          addToast('Validation Error', 'error', 'Unpaid portion must be assigned to an active guest booking, room, or staff member.');
           setIsProcessingDrinkSale(false);
           return;
         }
@@ -1947,6 +2055,10 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       }
 
       const drinkNames = drinkCart.map(i => `${i.drinkName} (x${i.quantity})`).join(', ');
+      const staffMember = drinkCustomerType === 'staff' ? staff.find(s => s.id === selectedStaffId || s.name === staffSearchQuery.split(' (')[0]) : null;
+      const displayGuestName = staffMember 
+        ? `${staffMember.name} (${staffMember.role})` 
+        : (drinkCustomerType === 'staff' ? staffSearchQuery : (drinkGuestName.trim() || (drinkCustomerType === 'room' ? `Room ${drinkRoomNumber} Guest` : 'Walk-In Guest')));
 
       const newSale: import('../types').DrinkSale = {
         id: 'drksale_' + Math.random().toString(36).substring(2, 9),
@@ -1957,9 +2069,12 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         quantity: drinkCart.reduce((sum, item) => sum + item.quantity, 0),
         unitPrice: drinkCart[0].unitPrice,
         totalPrice,
-        guestName: drinkGuestName.trim() || 'Walk-In Guest',
-        roomNumber: drinkRoomNumber.trim() || undefined,
-        bookingId: drinkBookingId || undefined,
+        guestName: drinkCustomerType === 'staff' ? (staffMember?.name || staffSearchQuery || 'Staff') : (drinkGuestName.trim() || (drinkCustomerType === 'room' ? `Room ${drinkRoomNumber} Guest` : 'Walk-In Guest')),
+        staffId: drinkCustomerType === 'staff' ? (selectedStaffId || staffMember?.id || undefined) : undefined,
+        staffName: drinkCustomerType === 'staff' ? (staffMember?.name || staffSearchQuery || undefined) : undefined,
+        customerType: drinkCustomerType,
+        roomNumber: drinkCustomerType === 'room' ? (drinkRoomNumber.trim() || undefined) : undefined,
+        bookingId: drinkCustomerType === 'room' ? (drinkBookingId || undefined) : undefined,
         receptionistId: currentUser.id,
         receptionistName: currentUser.name,
         branch: branch,
@@ -1980,13 +2095,29 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         dateCreated: serverTimestamp()
       });
 
+      const isStaffDebt = (drinkPaymentMethod === 'Unpaid (Add to Room Bill)' || drinkPaymentMethod === 'Split (Paid & Unpaid)') && drinkCustomerType === 'staff';
+      let methodLabel = drinkPaymentMethod;
+      if (isStaffDebt) {
+        if (drinkPaymentMethod === 'Split (Paid & Unpaid)') {
+          methodLabel = `Split Payment (Paid GH₵${paidAmount.toFixed(2)} via ${drinkSplitPaidMethod}, GH₵${unpaidAmount.toFixed(2)} to Staff Debt)`;
+        } else {
+          methodLabel = 'Staff Tab / Staff Debt';
+        }
+      } else if (drinkPaymentMethod === 'Split (Paid & Unpaid)') {
+        methodLabel = `Split Payment (Paid GH₵${paidAmount.toFixed(2)} via ${drinkSplitPaidMethod}, GH₵${unpaidAmount.toFixed(2)} to Room Bill)`;
+      } else if (drinkPaymentMethod === 'Split (Cash + Momo)') {
+        methodLabel = `Split (Cash: GH₵${drinkSplitCashAmount.toFixed(2)}, MoMo: GH₵${drinkSplitMomoAmount.toFixed(2)})`;
+      }
+
+      const auditDetails = `Sold ${drinkNames} (GH₵${newSale.totalPrice.toFixed(2)}) to ${displayGuestName}${newSale.roomNumber ? ` [Room ${newSale.roomNumber}]` : ''} via ${methodLabel}.`;
+
       addAuditLog(
         currentUser.id,
         currentUser.name,
         currentUser.role,
         branch,
         'Drink Sale Recorded',
-        `Sold ${drinkNames} (GH₵${newSale.totalPrice.toFixed(2)}) to ${newSale.guestName}${newSale.roomNumber ? ` [Room ${newSale.roomNumber}]` : ''} via ${drinkPaymentMethod}.`
+        auditDetails
       );
 
       // Persist to Firestore for Manager/Handover Audit
@@ -1999,7 +2130,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         userRole: currentUser.role,
         branch: branch,
         action: 'Drink Sale Recorded',
-        details: `Sold ${drinkNames} (GH₵${newSale.totalPrice.toFixed(2)}) to ${newSale.guestName}${newSale.roomNumber ? ` [Room ${newSale.roomNumber}]` : ''} via ${drinkPaymentMethod}.`
+        details: auditDetails
       });
 
       setDrinkSales(getDrinkSales());
@@ -2013,6 +2144,9 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       setDrinkSplitPaidAmount(0);
       setDrinkSplitUnpaidAmount(0);
       setDrinkSplitPaidMethod('Cash');
+      setDrinkCustomerType('walkin');
+      setSelectedStaffId(null);
+      setStaffSearchQuery('');
 
       addToast('Drink Sale Recorded', 'success', `Recorded GH₵${newSale.totalPrice.toFixed(2)} for ${drinkNames}. Serial: ${serialNumber}`);
     } catch (err: any) {
@@ -2616,7 +2750,8 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         const updated = [newRevDoc, ...prev.filter(r => r.id !== revId)];
         try {
           const raw = localStorage.getItem('nabslodge_room_revenues');
-          const globalRevs = raw ? JSON.parse(raw) : [];
+          const parsed = raw ? JSON.parse(raw) : [];
+          const globalRevs = Array.isArray(parsed) ? parsed : [];
           const merged = [newRevDoc, ...globalRevs.filter((r: any) => r.id !== revId)];
           localStorage.setItem('nabslodge_room_revenues', JSON.stringify(merged));
         } catch (err) {
@@ -3528,7 +3663,9 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
       // Save to localStorage cache immediately for instant UI feedback
       try {
-        const existing = JSON.parse(localStorage.getItem('nabslodge_activity_ledger') || '[]');
+        const raw = localStorage.getItem('nabslodge_activity_ledger');
+        const parsed = raw ? JSON.parse(raw) : [];
+        const existing = Array.isArray(parsed) ? parsed : [];
         localStorage.setItem('nabslodge_activity_ledger', JSON.stringify([payload, ...existing]));
       } catch {}
 
@@ -4438,6 +4575,21 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
   const theme = getThemeClasses(isDarkMode);
 
+  // Helper for highlighting matching text in search results
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === query.toLowerCase() 
+            ? <span key={i} className="bg-purple-500/30 text-purple-600 dark:text-purple-400 font-black px-0.5 rounded">{part}</span> 
+            : <span key={i}>{part}</span>
+        )}
+      </>
+    );
+  };
+
   return (
     <div id="receptionist-dashboard-container" tabIndex={-1} className="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 transition-colors duration-200 min-h-screen w-full flex flex-col md:flex-row font-sans outline-none">
       
@@ -4476,7 +4628,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
           </div>
           <div className="px-3 py-2 text-xs font-mono rounded-xl border bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
             <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5 text-zinc-400 dark:text-zinc-500">Receptionist</div>
-            <div className="truncate" title={currentUser.name}>{currentUser.name}</div>
+            <div className="truncate" title={currentUser?.name || ''}>{currentUser?.name || 'User'}</div>
           </div>
         </div>
 
@@ -4705,6 +4857,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                 </button>
                 <button
                   onClick={() => {
+                    loadStaffData();
                     if (drinks.length > 0) {
                       setSelectedDrinkId(drinks[0].id);
                     }
@@ -6695,6 +6848,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   </div>
                   <button
                     onClick={() => {
+                      loadStaffData();
                       const availableDrinks = drinks.filter(d => d.inStock !== false);
                       if (availableDrinks.length > 0) {
                         setSelectedDrinkId(availableDrinks[0].id);
@@ -6787,6 +6941,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                                 type="button"
                                 onClick={() => {
                                   setSelectedDrinkId(drink.id);
+                                  loadStaffData();
                                   setDrinkQty(1);
                                   setDrinkGuestName('');
                                   setDrinkRoomNumber('');
@@ -6819,6 +6974,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                     }}
                     onSettleSale={handleSettleDrinkSale}
                     onRecordNewSale={() => {
+                      loadStaffData();
                       const availableDrinks = drinks.filter(d => d.inStock !== false);
                       if (availableDrinks.length > 0) {
                         setSelectedDrinkId(availableDrinks[0].id);
@@ -10080,22 +10236,30 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       {/* --- HANDOVER MODAL --- */}
       <AnimatePresence>
         {showHandoverModal && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative flex flex-col max-h-[90vh] ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHandoverModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl relative flex flex-col max-h-[92vh] ${
+                isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
               <button
                 onClick={() => setShowHandoverModal(false)}
-                className={`absolute top-5 right-5 p-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`absolute top-5 right-5 p-2 rounded-full transition-all cursor-pointer ${
                   isDarkMode ? 'hover:bg-zinc-800 text-zinc-500 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
 
               <div className="flex items-center gap-3 mb-4 flex-shrink-0">
@@ -10565,62 +10729,75 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         </div>
       )}
 
-      {/* Edit / Rectify Booking Modal */}
-      {showEditBookingModal && editingBookingTarget && (
-        <EditBookingModal
-          booking={editingBookingTarget}
-          rooms={rooms}
-          isDarkMode={isDarkMode}
-          currentUser={currentUser}
-          onClose={() => {
-            setShowEditBookingModal(false);
-            setEditingBookingTarget(null);
-          }}
-          onSuccess={() => {
-            const updated = getBookings().filter(b => b.branch === branch);
-            setBookings(updated);
-          }}
-        />
-      )}
+      {/* Modals & Overlays */}
+      <AnimatePresence>
+        {/* Edit / Rectify Booking Modal */}
+        {showEditBookingModal && editingBookingTarget && (
+          <EditBookingModal
+            booking={editingBookingTarget}
+            rooms={rooms}
+            isDarkMode={isDarkMode}
+            currentUser={currentUser}
+            onClose={() => {
+              setShowEditBookingModal(false);
+              setEditingBookingTarget(null);
+            }}
+            onSuccess={() => {
+              const updated = getBookings().filter(b => b.branch === branch);
+              setBookings(updated);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Transfer Room Modal */}
-      {showTransferRoomModal && transferBookingTarget && (
-        <TransferRoomModal
-          booking={transferBookingTarget}
-          rooms={rooms}
-          isDarkMode={isDarkMode}
-          currentUser={currentUser}
-          onClose={() => {
-            setShowTransferRoomModal(false);
-            setTransferBookingTarget(null);
-          }}
-          onSuccess={() => {
-            setShowTransferRoomModal(false);
-            setTransferBookingTarget(null);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {/* Transfer Room Modal */}
+        {showTransferRoomModal && transferBookingTarget && (
+          <TransferRoomModal
+            booking={transferBookingTarget}
+            rooms={rooms}
+            isDarkMode={isDarkMode}
+            currentUser={currentUser}
+            onClose={() => {
+              setShowTransferRoomModal(false);
+              setTransferBookingTarget(null);
+            }}
+            onSuccess={() => {
+              setShowTransferRoomModal(false);
+              setTransferBookingTarget(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* --- DRINK / BAR SALE RECORDING MODAL --- */}
       <AnimatePresence>
         {showDrinkOrderModal && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-lg shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-thin ${
-                theme.tableContainer
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDrinkOrderModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl relative max-h-[92vh] overflow-y-auto scrollbar-thin ${
+                isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
               <button
                 type="button"
                 onClick={() => setShowDrinkOrderModal(false)}
-                className={`absolute top-5 right-5 p-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`absolute top-5 right-5 p-2 rounded-full transition-all cursor-pointer ${
                   isDarkMode ? 'hover:bg-zinc-800 text-zinc-500 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
 
               <div className="flex items-center gap-3 mb-1">
@@ -10635,9 +10812,294 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                 Select a drink item, specify quantity, assign to a guest room or walk-in, and record instant payment.
               </p>
 
-              <form onSubmit={handleProcessDrinkSale} className="space-y-4 text-xs">
-                  {/* Order Items */}
-                <div className={`space-y-3 p-3 rounded-xl border border-dashed ${isDarkMode ? 'border-zinc-700' : 'border-zinc-300'}`}>
+              <form onSubmit={handleProcessDrinkSale} className="space-y-5 text-xs">
+                {/* 1. Recipient Selection (Top) */}
+                <div className="space-y-2">
+                  <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                    Sale Recipient Type *
+                  </label>
+                  <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-slate-100 border-slate-200'}`}>
+                    {(['walkin', 'room', 'staff'] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setDrinkCustomerType(type);
+                          if (type !== 'room') {
+                            setDrinkRoomNumber('');
+                            setDrinkBookingId('');
+                          }
+                          if (type !== 'staff') {
+                            setSelectedStaffId(null);
+                          } else {
+                            loadStaffData();
+                          }
+                        }}
+                        className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all capitalize flex items-center justify-center gap-1.5 ${
+                          drinkCustomerType === type
+                            ? 'bg-purple-600 text-white shadow-sm'
+                            : (isDarkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700')
+                        }`}
+                      >
+                        {type === 'walkin' ? (
+                          <>
+                            <UserIcon className="w-3 h-3" />
+                            Walk-In
+                          </>
+                        ) : type === 'room' ? (
+                          <>
+                            <MapPin className="w-3 h-3" />
+                            Room Guest
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-3 h-3" />
+                            Staff
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Dynamic Recipient Details */}
+                <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-900/30 border-zinc-800' : 'bg-slate-50/50 border-slate-200'}`}>
+                  {drinkCustomerType === 'walkin' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                          Guest Name (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={drinkGuestName}
+                          onChange={(e) => setDrinkGuestName(e.target.value)}
+                          placeholder="e.g. Walk-In Customer"
+                          className={`block w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors border ${theme.input}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {drinkCustomerType === 'room' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                          Link to Checked-In Booking *
+                        </label>
+                        <select
+                          required={drinkCustomerType === 'room'}
+                          value={drinkBookingId}
+                          onChange={(e) => {
+                            const bId = e.target.value;
+                            setDrinkBookingId(bId);
+                            const bookingObj = bookings.find(b => b.id === bId);
+                            if (bookingObj) {
+                              setDrinkRoomNumber(bookingObj.roomNumber);
+                              setDrinkGuestName(bookingObj.guestName);
+                            } else {
+                              setDrinkRoomNumber('');
+                              setDrinkGuestName('');
+                            }
+                          }}
+                          className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
+                        >
+                          <option value="">-- Choose Booking --</option>
+                          {bookings.filter(b => b.status === 'CheckedIn' && b.branch === branch).map(b => (
+                            <option key={b.id} value={b.id}>
+                              Room {b.roomNumber} - {b.guestName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {!drinkBookingId && (
+                        <div className="space-y-1.5">
+                          <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            Manual Room Number Entry
+                          </label>
+                          <select
+                            value={drinkRoomNumber}
+                            onChange={(e) => {
+                              setDrinkRoomNumber(e.target.value);
+                              const roomObj = rooms.find(r => r.roomNumber === e.target.value);
+                              if (roomObj && roomObj.guestName) {
+                                setDrinkGuestName(roomObj.guestName);
+                              }
+                            }}
+                            className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
+                          >
+                            <option value="">-- Select Room --</option>
+                            {dynamicRooms.filter(r => r.status === 'Occupied' || r.guestName).map(r => (
+                              <option key={r.roomNumber} value={r.roomNumber}>
+                                Room {r.roomNumber} ({r.guestName || 'Occupied'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {drinkCustomerType === 'staff' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                          Select Staff Member *
+                        </label>
+                        <div className="space-y-2 relative staff-search-container">
+                          {selectedStaffId ? (
+                            // Selection Chip View
+                            <div className={`flex items-center justify-between p-3 rounded-xl border-2 animate-in fade-in zoom-in duration-200 ${
+                              isDarkMode 
+                                ? 'bg-purple-500/10 border-purple-500/30 text-purple-300 shadow-[0_0_20px_-5px_rgba(168,85,247,0.2)]' 
+                                : 'bg-purple-50 border-purple-200 text-purple-700 shadow-[0_4px_12px_-2px_rgba(168,85,247,0.1)]'
+                            }`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                                  isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'
+                                }`}>
+                                  {(staff.find(s => s.id === selectedStaffId)?.name || 'S').charAt(0)}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold leading-tight">
+                                    {staff.find(s => s.id === selectedStaffId)?.name}
+                                  </span>
+                                  <span className="text-[10px] opacity-70 uppercase font-mono tracking-tight font-black">
+                                    {staff.find(s => s.id === selectedStaffId)?.role}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedStaffId(null);
+                                  setStaffSearchQuery('');
+                                  setShowStaffDropdown(false);
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors hover:bg-black/5 ${
+                                  isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                                }`}
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            // Search Input View
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Type to search staff by name or role..."
+                                  value={staffSearchQuery}
+                                  onFocus={() => setShowStaffDropdown(true)}
+                                  onChange={(e) => {
+                                    setStaffSearchQuery(e.target.value);
+                                    setSelectedStaffId(null);
+                                    setShowStaffDropdown(true);
+                                  }}
+                                  className={`block w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none border-2 transition-all ${
+                                    isDarkMode 
+                                      ? 'bg-zinc-900 border-zinc-800 focus:border-purple-500/50 shadow-[0_0_15px_-5px_rgba(168,85,247,0.3)]' 
+                                      : 'bg-slate-50 border-slate-200 focus:border-purple-400/50 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.05)]'
+                                  }`}
+                                />
+                                
+                                {showStaffDropdown && staffSearchQuery.trim().length > 0 && (
+                                  <div className={`absolute top-full left-0 right-0 mt-2 z-[100] rounded-xl border shadow-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 ${
+                                    isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
+                                  }`}>
+                                    <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider border-b flex justify-between items-center ${
+                                      isDarkMode ? 'text-zinc-500 border-zinc-800' : 'text-slate-400 border-slate-100'
+                                    }`}>
+                                      <span>Found {staff.filter(s => 
+                                        (s.name || '').toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
+                                        (s.role || '').toLowerCase().includes(staffSearchQuery.toLowerCase())
+                                      ).length} Results</span>
+                                      <span className="animate-pulse">●</span>
+                                    </div>
+                                    
+                                    {staff
+                                      .filter(s => 
+                                        (s.name || '').toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
+                                        (s.role || '').toLowerCase().includes(staffSearchQuery.toLowerCase())
+                                      )
+                                      .map(s => (
+                                        <button
+                                          key={s.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedStaffId(s.id);
+                                            setStaffSearchQuery(s.name);
+                                            setShowStaffDropdown(false);
+                                          }}
+                                          className={`w-full text-left px-4 py-3 text-xs transition-colors border-b last:border-0 flex items-center justify-between group ${
+                                            isDarkMode 
+                                              ? 'border-zinc-800 hover:bg-zinc-800/50 text-zinc-300' 
+                                              : 'border-slate-100 hover:bg-slate-50 text-slate-700'
+                                          }`}
+                                        >
+                                          <div className="flex flex-col">
+                                            <span className="font-bold text-sm">
+                                              {highlightMatch(s.name, staffSearchQuery)}
+                                            </span> 
+                                            <span className="opacity-60 text-[10px] uppercase font-mono font-black">
+                                              {highlightMatch(s.role || 'No Role', staffSearchQuery)}
+                                            </span>
+                                          </div>
+                                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className={`px-2 py-1 rounded text-[9px] font-bold uppercase ${
+                                              isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'
+                                            }`}>
+                                              Select
+                                            </div>
+                                          </div>
+                                        </button>
+                                      ))}
+                                    {staff.filter(s => 
+                                        (s.name || '').toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
+                                        (s.role || '').toLowerCase().includes(staffSearchQuery.toLowerCase())
+                                      ).length === 0 && (
+                                      <div className="px-4 py-8 text-center">
+                                        <div className="text-lg mb-1">🔍</div>
+                                        <div className={`text-xs font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                                          No matching staff found
+                                        </div>
+                                        <div className="text-[10px] opacity-50 mt-1">
+                                          Try searching for a different name or role
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (currentUser) {
+                                    setSelectedStaffId(currentUser.id);
+                                    setStaffSearchQuery(`${currentUser.name} (${currentUser.role || 'Receptionist'})`);
+                                    setShowStaffDropdown(false);
+                                  }
+                                }}
+                                className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                  isDarkMode ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                                } hover:border-purple-500/50 shadow-sm`}
+                              >
+                                <UserIcon className="w-3 h-3" />
+                                Me ({(currentUser?.name || 'User').split(' ')[0]})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Drink Items Selection */}
+                <div className={`space-y-3 p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-900/40 border-zinc-700' : 'bg-white border-zinc-200'}`}>
                   <div className="flex gap-2 items-end">
                     <div className="flex-1 space-y-1.5">
                       <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
@@ -10707,78 +11169,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   )}
                 </div>
 
-                {/* Select Existing Checked-In Guest / Booking */}
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                    Link to Checked-In Guest / Booking (Optional)
-                  </label>
-                  <select
-                    value={drinkBookingId}
-                    onChange={(e) => {
-                      const bId = e.target.value;
-                      setDrinkBookingId(bId);
-                      const bookingObj = bookings.find(b => b.id === bId);
-                      if (bookingObj) {
-                        setDrinkRoomNumber(bookingObj.roomNumber);
-                        setDrinkGuestName(bookingObj.guestName);
-                      } else {
-                        setDrinkRoomNumber('');
-                        setDrinkGuestName('');
-                      }
-                    }}
-                    className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
-                  >
-                    <option value="">-- None (Walk-in or Manual Room) --</option>
-                    {bookings.filter(b => b.status === 'CheckedIn' && b.branch === branch).map(b => (
-                      <option key={b.id} value={b.id}>
-                        Room {b.roomNumber} - {b.guestName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Guest & Room Details */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                      Guest Name (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={drinkGuestName}
-                      onChange={(e) => setDrinkGuestName(e.target.value)}
-                      placeholder="e.g. Kwame Mensah"
-                      className={`block w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors border ${theme.input}`}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                      Room Number (Optional)
-                    </label>
-                    <select
-                      value={drinkRoomNumber}
-                      onChange={(e) => {
-                        setDrinkRoomNumber(e.target.value);
-                        // Auto prefill guest name if selecting checked-in room
-                        const roomObj = rooms.find(r => r.roomNumber === e.target.value);
-                        if (roomObj && roomObj.guestName) {
-                          setDrinkGuestName(roomObj.guestName);
-                        }
-                      }}
-                      className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
-                    >
-                      <option value="">-- Non-Resident / Walk-In --</option>
-                      {dynamicRooms.filter(r => r.status === 'Occupied' || r.guestName).map(r => (
-                        <option key={r.roomNumber} value={r.roomNumber}>
-                          Room {r.roomNumber} ({r.guestName || 'Occupied'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Payment Method */}
+                {/* 4. Payment Method */}
                 <div className="space-y-1.5">
                   <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
                     Payment Method *
@@ -10787,7 +11178,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                     <button
                       type="button"
                       onClick={() => setDrinkPaymentMethod('Cash')}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
                         drinkPaymentMethod === 'Cash'
                           ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
                           : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
@@ -10798,7 +11189,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                     <button
                       type="button"
                       onClick={() => setDrinkPaymentMethod('Mobile Money')}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
                         drinkPaymentMethod === 'Mobile Money'
                           ? 'bg-blue-600 text-white border-blue-500 shadow-md'
                           : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
@@ -10814,7 +11205,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                         setDrinkSplitCashAmount(total);
                         setDrinkSplitMomoAmount(0);
                       }}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
                         drinkPaymentMethod === 'Split (Cash + Momo)'
                           ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
                           : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
@@ -10822,36 +11213,40 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                     >
                       Split Cash+MoMo
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setDrinkPaymentMethod('Unpaid (Add to Room Bill)')}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
-                        drinkPaymentMethod === 'Unpaid (Add to Room Bill)'
-                          ? 'bg-amber-600 text-white border-amber-500 shadow-md'
-                          : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
-                      }`}
-                    >
-                      Unpaid (Room Bill)
-                    </button>
+                    {(drinkCustomerType === 'room' || drinkCustomerType === 'staff') && (
+                      <button
+                        type="button"
+                        onClick={() => setDrinkPaymentMethod('Unpaid (Add to Room Bill)')}
+                        className={`px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                          drinkPaymentMethod === 'Unpaid (Add to Room Bill)'
+                            ? (drinkCustomerType === 'staff' ? 'bg-rose-600 border-rose-500' : 'bg-amber-600 border-amber-500') + ' text-white shadow-md'
+                            : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
+                        }`}
+                      >
+                        {drinkCustomerType === 'staff' ? 'Unpaid / Pay Later' : 'Unpaid (Room Bill)'}
+                      </button>
+                    )}
                   </div>
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDrinkPaymentMethod('Split (Paid & Unpaid)');
-                        const total = drinkCart.reduce((sum, item) => sum + item.subtotal, 0);
-                        setDrinkSplitPaidAmount(total);
-                        setDrinkSplitUnpaidAmount(0);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
-                        drinkPaymentMethod === 'Split (Paid & Unpaid)'
-                          ? 'bg-purple-600 text-white border-purple-500 shadow-md'
-                          : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
-                      }`}
-                    >
-                      Split (Paid & Unpaid / Room Bill)
-                    </button>
-                  </div>
+              {(drinkCustomerType === 'room' || drinkCustomerType === 'staff') && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrinkPaymentMethod('Split (Paid & Unpaid)');
+                      const total = drinkCart.reduce((sum, item) => sum + item.subtotal, 0);
+                      setDrinkSplitPaidAmount(total);
+                      setDrinkSplitUnpaidAmount(0);
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      drinkPaymentMethod === 'Split (Paid & Unpaid)'
+                        ? 'bg-purple-600 text-white border-purple-500 shadow-md'
+                        : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600')
+                    }`}
+                  >
+                    {drinkCustomerType === 'staff' ? 'Split (Paid & Unpaid / Pay Later)' : 'Split (Paid & Unpaid / Room Bill)'}
+                  </button>
+                </div>
+              )}
 
                   {drinkPaymentMethod === 'Split (Cash + Momo)' && (
                     <div className={`grid grid-cols-2 gap-3 mt-3 p-3 rounded-xl border ${isDarkMode ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
@@ -10940,7 +11335,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                         </div>
                         <div className="flex flex-col justify-end">
                           <label className={`block text-[10px] font-mono mb-1 leading-tight ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                            Unpaid / Room Bill (GH₵)
+                            {drinkCustomerType === 'staff' ? 'Debt / Pay Later' : 'Room Bill'} (GH₵)
                           </label>
                           <input
                             type="number"

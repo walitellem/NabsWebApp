@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, initializeFirestore, memoryLocalCache, deleteDoc, setDoc, updateDoc, addDoc, DocumentReference, DocumentData, CollectionReference, SetOptions, runTransaction, doc } from "firebase/firestore";
+import { getFirestore, initializeFirestore, memoryLocalCache, deleteDoc, setDoc, updateDoc, addDoc, DocumentReference, DocumentData, CollectionReference, SetOptions, runTransaction, doc, disableNetwork } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 export const firebaseConfig = {
@@ -18,7 +18,12 @@ if (!firebaseConfig.apiKey) {
 const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, { localCache: memoryLocalCache(), experimentalForceLongPolling: true });
 export const auth = getAuth(app);
-export const isFirebaseConfigured = !!firebaseConfig.projectId;
+export const isFirebaseConfigured = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY' && firebaseConfig.apiKey !== '';
+
+// Disable network sync if not configured to prevent background connection errors
+if (!isFirebaseConfigured) {
+  disableNetwork(db).catch(err => console.error("Failed to disable Firestore network:", err));
+}
 
 export enum OperationType {
   READ = 'READ',

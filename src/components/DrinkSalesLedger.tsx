@@ -64,7 +64,7 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   // 2. Order Type Filter
-  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'room' | 'walk_in'>('all');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'room' | 'walk_in' | 'staff'>('all');
 
   // 3. Payment Status Filter: 'all' | 'paid' | 'unpaid'
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
@@ -217,7 +217,9 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
       if (orderTypeFilter === 'room') {
         if (!sale.roomNumber || sale.roomNumber.trim() === '') return false;
       } else if (orderTypeFilter === 'walk_in') {
-        if (sale.roomNumber && sale.roomNumber.trim() !== '') return false;
+        if ((sale.roomNumber && sale.roomNumber.trim() !== '') || sale.customerType === 'staff') return false;
+      } else if (orderTypeFilter === 'staff') {
+        if (sale.customerType !== 'staff') return false;
       }
 
       // 5. Search Query Filter (Guest Name, Room, Drink Item, Serial, Receptionist, Phone, Payment)
@@ -578,6 +580,16 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
                 >
                   🍸 Walk-In / Bar
                 </button>
+                <button
+                  onClick={() => setOrderTypeFilter('staff')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    orderTypeFilter === 'staff'
+                      ? (isDarkMode ? 'bg-purple-900/50 text-purple-300 shadow-xs' : 'bg-purple-100 text-purple-800 shadow-xs')
+                      : (isDarkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700')
+                  }`}
+                >
+                  👤 Staff Orders
+                </button>
               </div>
 
               {/* Status Filter Tabs */}
@@ -781,7 +793,17 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
 
                       {/* Dedicated Assigned Room */}
                       <td className="py-3.5 px-4">
-                        {sale.roomNumber ? (
+                        {sale.customerType === 'staff' ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                              isDarkMode 
+                                ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' 
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}>
+                              Staff Internal
+                            </span>
+                          </div>
+                        ) : sale.roomNumber ? (
                           <div className="flex flex-col gap-1 items-start">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-extrabold border ${
                               isUnpaid
@@ -809,14 +831,21 @@ export const DrinkSalesLedger: React.FC<DrinkSalesLedgerProps> = ({
 
                       {/* Guest Name */}
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-xs">
-                          {sale.guestName || 'Walk-In Guest'}
-                        </div>
-                        {sale.guestPhone && (
-                          <div className={`text-[10px] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
-                            {sale.guestPhone}
+                        <div className="flex flex-col gap-1">
+                          <div className="font-bold text-xs flex items-center gap-1.5">
+                            {sale.guestName || 'Walk-In Guest'}
+                            {sale.customerType === 'staff' && (
+                              <span className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-400 text-[8px] font-black rounded uppercase tracking-tighter border border-indigo-500/30">
+                                Staff
+                              </span>
+                            )}
                           </div>
-                        )}
+                          {sale.guestPhone && (
+                            <div className={`text-[10px] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                              {sale.guestPhone}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Beverage Items */}

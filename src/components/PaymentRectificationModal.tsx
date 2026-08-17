@@ -78,16 +78,48 @@ export const PaymentRectificationModal: React.FC<PaymentRectificationModalProps>
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className={`border rounded-3xl p-6 w-full max-w-lg ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'}`}>
-        <div className="flex justify-between items-center pb-4">
-          <h3 className="font-bold">Rectify Payment</h3>
-          <button onClick={onClose}><X className="w-5 h-5"/></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60 backdrop-blur-md"
+      />
+      
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+      >
+        <div className="flex justify-between items-center pb-4 border-b border-zinc-100 dark:border-zinc-800 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold">Rectify Payment</h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className={`p-2 rounded-full transition-colors ${
+              isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-400'
+            }`}
+          >
+            <X className="w-5 h-5"/>
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs mb-1">Proposed Status</label>
-            <select value={proposedPaymentStatus} onChange={(e) => setProposedPaymentStatus(e.target.value as PaymentStatus)} className="w-full p-2 rounded-xl border">
+            <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold mb-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Proposed Status</label>
+            <select 
+              value={proposedPaymentStatus} 
+              onChange={(e) => setProposedPaymentStatus(e.target.value as PaymentStatus)} 
+              className={`w-full p-3 rounded-xl border-2 focus:outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-slate-50 border-slate-100'
+              }`}
+            >
               <option value="Paid">Paid</option>
               <option value="Unpaid">Unpaid</option>
               <option value="Partial">Partial</option>
@@ -95,14 +127,36 @@ export const PaymentRectificationModal: React.FC<PaymentRectificationModalProps>
             </select>
           </div>
           <div>
-            <label className="block text-xs mb-1">Proposed Amount Paid</label>
-            <input type="number" value={proposedAmountPaid} onChange={(e) => setProposedAmountPaid(e.target.value)} className="w-full p-2 rounded-xl border"/>
+            <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold mb-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Proposed Amount Paid</label>
+            <input 
+              type="number" 
+              value={proposedAmountPaid} 
+              onChange={(e) => setProposedAmountPaid(e.target.value)} 
+              className={`w-full p-3 rounded-xl border-2 focus:outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-slate-50 border-slate-100'
+              }`}
+            />
           </div>
           <div>
-            <label className="block text-xs mb-1">Reason for Rectification</label>
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} required className="w-full p-2 rounded-xl border" />
+            <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold mb-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Reason for Rectification</label>
+            <textarea 
+              value={reason} 
+              onChange={(e) => setReason(e.target.value)} 
+              required 
+              rows={3}
+              placeholder="Why are you rectifying this payment?"
+              className={`w-full p-3 rounded-xl border-2 focus:outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-slate-50 border-slate-100'
+              }`} 
+            />
           </div>
-          <button type="submit" className="w-full p-3 rounded-xl bg-blue-600 text-white font-bold" disabled={isSubmitting}>Submit for Approval</button>
+          <button 
+            type="submit" 
+            className="w-full p-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50" 
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit for Approval'}
+          </button>
         </form>
       </motion.div>
     </div>
