@@ -530,6 +530,17 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
         try {
           await safeUpdateDoc(doc(db, 'bookings', req.bookingId), updatedBookingFields);
 
+          if (req.proposedRoomId && req.proposedRoomId !== booking.roomId && (booking.status === 'CheckedIn' || (booking.status as string) === 'checked_in')) {
+            try {
+              if (booking.roomId) {
+                await safeUpdateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available' });
+              }
+              await safeUpdateDoc(doc(db, 'rooms', req.proposedRoomId), { status: 'Occupied' });
+            } catch (rErr) {
+              console.warn("Room status update warning during edit approval:", rErr);
+            }
+          }
+
           const matchingRevs = roomRevenue.filter(r => r.bookingId === req.bookingId);
           const totalCurrentRev = matchingRevs.reduce((sum, r) => sum + Number(r.amount || 0), 0);
           
@@ -7182,7 +7193,7 @@ const theme = getThemeClasses(isDarkMode);
                       (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
                     );
                     if (hasActiveCheckedIn) return 'Occupied';
-                    if (r.status === 'Occupied') return 'Occupied';
+                    if (r.status === "Occupied") return "Available";
                     return r.status || 'Available';
                   };
 

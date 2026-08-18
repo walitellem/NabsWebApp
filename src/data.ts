@@ -1057,7 +1057,10 @@ export const deleteRoom = (
 
 export const createBooking = (booking: Booking): { success: boolean; error?: string; booking?: Booking } => {
   const rooms = getRooms();
-  const roomIndex = rooms.findIndex((r) => r.id === booking.roomId);
+  let roomIndex = rooms.findIndex((r) => r.id === booking.roomId);
+  if (roomIndex === -1 && booking.roomNumber && booking.branch) {
+    roomIndex = rooms.findIndex((r) => String(r.roomNumber) === String(booking.roomNumber) && r.branch === booking.branch);
+  }
   
   if (roomIndex === -1) {
     return { success: false, error: 'Room does not exist.' };
@@ -1126,7 +1129,8 @@ export const checkoutBooking = (
   let drinksUpdated = false;
   let unpaidDrinksTotal = 0;
   drinkSales.forEach((sale) => {
-    const isMatch = sale.bookingId === bookingId || (sale.roomNumber && booking.roomNumber && sale.roomNumber === booking.roomNumber);
+    const isBranchMatch = !sale.branch || sale.branch === booking.branch;
+    const isMatch = sale.bookingId === bookingId || (isBranchMatch && sale.roomNumber && booking.roomNumber && sale.roomNumber === booking.roomNumber);
     const isUnpaid = sale.paymentStatus === 'Unpaid' || sale.paymentStatus === 'Split' || sale.paymentStatus?.startsWith('Partially') || sale.paymentMethod === 'Unpaid (Add to Room Bill)';
     if (isMatch && isUnpaid) {
       const unpaidAmt = sale.unpaidAmount || (sale.totalPrice - (sale.paidAmount || 0)) || sale.totalPrice;
@@ -1175,7 +1179,7 @@ export const checkoutBooking = (
 
   // Update Room status back to available
   const rooms = getRooms();
-  const roomIndex = rooms.findIndex((r) => r.id === booking.roomId);
+  const roomIndex = rooms.findIndex((r) => r.id === booking.roomId || (String(r.roomNumber) === String(booking.roomNumber) && r.branch === booking.branch));
   if (roomIndex !== -1) {
     rooms[roomIndex].status = nextRoomStatus;
     saveRooms(rooms);
@@ -1192,7 +1196,7 @@ export const checkoutBooking = (
       discountAmount: bookings[bookingIndex].discountAmount
     });
     if (roomIndex !== -1) {
-      safeUpdateDoc(doc(db, 'rooms', booking.roomId), { status: nextRoomStatus });
+      safeUpdateDoc(doc(db, 'rooms', rooms[roomIndex].id), { status: nextRoomStatus });
     }
   }
 
@@ -1230,7 +1234,7 @@ export const cancelBooking = (
 
   // Update Room status back to available
   const rooms = getRooms();
-  const roomIndex = rooms.findIndex((r) => r.id === booking.roomId);
+  const roomIndex = rooms.findIndex((r) => r.id === booking.roomId || (String(r.roomNumber) === String(booking.roomNumber) && r.branch === booking.branch));
   if (roomIndex !== -1) {
     rooms[roomIndex].status = 'Available';
     saveRooms(rooms);
@@ -1241,7 +1245,7 @@ export const cancelBooking = (
       status: 'Cancelled'
     });
     if (roomIndex !== -1) {
-      safeUpdateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available' });
+      safeUpdateDoc(doc(db, 'rooms', rooms[roomIndex].id), { status: 'Available' });
     }
   }
 
@@ -1325,7 +1329,15 @@ export const updateRoomStatus = (
 
   const room = rooms[index];
   if (room.status === 'Occupied' && status !== 'Occupied') {
-    return { success: false, error: 'Cannot change status of occupied room. Please complete guest check-out first.' };
+    // Check if there's actually an active guest preventing the status change
+    const bookings = getBookings();
+    const hasActiveGuest = bookings.some(b => 
+      (b.roomId === roomId || (String(b.roomNumber) === String(room.roomNumber) && (b.branch === room.branch || (!b.branch && room.branch === 'Annex')))) && 
+      (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
+    );
+    if (hasActiveGuest) {
+      return { success: false, error: 'Cannot change status of occupied room. Please complete guest check-out first.' };
+    }
   }
 
   const oldStatus = room.status;

@@ -464,6 +464,11 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const [showCrossBranch, setShowCrossBranch] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
 
+  // Derived state to safely filter bookings for the local branch view, while preserving the raw bookings array for cross-branch checks.
+  const branchBookings = useMemo(() => {
+    return bookings.filter(b => b.branch === branch || !b.branch);
+  }, [bookings, branch]);
+
   const dynamicRooms = useMemo(() => {
     return rooms.map(r => {
       const activeBooking = bookings.find(b => 
@@ -1774,14 +1779,12 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
         setIsLoadingData(false);
       });
 
-      const bookingsQ = query(collection(db, 'bookings'), where('branch', '==', branch));
+      const bookingsQ = query(collection(db, 'bookings'));
       unsubBookings = onSnapshot(bookingsQ, (snapshot) => {
         const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
         setBookings(fetched);
         try {
-          const allLocalBookings = getBookings();
-          const otherBranchBookings = allLocalBookings.filter(b => b.branch !== branch);
-          saveBookings([...otherBranchBookings, ...fetched]);
+          saveBookings(fetched);
         } catch (err) {
           console.warn("Local storage bookings merge error:", err);
         }
@@ -4135,26 +4138,27 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   };
 
   const getRoomEffectiveStatus = (room: Room): RoomStatus => {
-    const normalizedRoomId = String(room.id || '').trim().toLowerCase();
-    const normalizedRoomNum = String(room.roomNumber || '').trim().toLowerCase();
+    const normalizedRoomId = String(room.id || "").trim().toLowerCase();
+    const normalizedRoomNum = String(room.roomNumber || "").trim().toLowerCase();
 
     const activeBooking = bookings.find(b => {
-      const isActive = b.status === 'CheckedIn' || b.status === 'checked_in';
-      const isSameBranch = b.branch === room.branch || !b.branch || b.branch === branch;
+      const isActive = b.status === "CheckedIn" || b.status === "checked_in";
+      const effectiveBookingBranch = b.branch || branch;
+      const isSameBranch = effectiveBookingBranch === room.branch;
       
       if (!isActive || !isSameBranch) return false;
 
-      const bookedRoomIds = String(b.roomId || '').split(',').map(r => r.trim().toLowerCase()).filter(r => r !== '');
-      const bookedRoomNums = String(b.roomNumber || '').split(',').map(r => r.trim().toLowerCase()).filter(r => r !== '');
+      const bookedRoomIds = String(b.roomId || "").split(",").map(r => r.trim().toLowerCase()).filter(r => r !== "");
+      const bookedRoomNums = String(b.roomNumber || "").split(",").map(r => r.trim().toLowerCase()).filter(r => r !== "");
 
       return bookedRoomIds.includes(normalizedRoomId) || bookedRoomNums.includes(normalizedRoomNum);
     });
 
-    if (activeBooking) return 'Occupied';
-    // If it's marked as Occupied, keep it marked as Occupied.
-    if (room.status === 'Occupied') return 'Occupied';
-    return room.status;
+    if (activeBooking) return "Occupied";
+    if (room.status === "Occupied") return "Available";
+    return room.status || "Available";
   };
+
 
   // Count metrics for header stats
   const totalRoomsCount = rooms.length;
@@ -4167,7 +4171,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const getDueSoonBookings = () => {
     const now = new Date().getTime() + (tick * 0); // Reactive dependency on 60s tick
     const checkOutTimeSetting = localStorage.getItem('globalCheckOutTime') || '12:00';
-    return bookings.filter(b => {
+    return branchBookings.filter(b => {
       if (b.status !== 'CheckedIn') return false;
       const targetStr = b.checkOutDate.includes('T') ? b.checkOutDate : `${b.checkOutDate}T${checkOutTimeSetting}:00`;
       const checkoutTime = new Date(targetStr).getTime();
@@ -4686,7 +4690,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
             >
               <div className="flex items-center gap-3">
                 <Calendar className="w-4 h-4" />
-                Booking History ({bookings.length})
+                Booking History ({branchBookings.length})
               </div>
               <Unlock className="w-3.5 h-3.5 text-emerald-500" />
             </button>
@@ -4943,7 +4947,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
               {(() => {
                 const query = searchFutureBookings.toLowerCase().trim();
-                const filtered = bookings.filter(b => {
+                const filtered = branchBookings.filter(b => {
                   // search query
                   if (query) {
                     const matchesSearch = String(b.guestName || '').toLowerCase().includes(query) ||
@@ -6605,7 +6609,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-zinc-850">
                     {(() => {
-                      const filteredBookings = bookings
+                      const filteredBookings = branchBookings
                         .filter(b => historyStatusFilter === 'All' || b.status === historyStatusFilter)
                         .filter(b => historyPaymentFilter === 'All' || b.paymentStatus === historyPaymentFilter)
                         .filter(b => {
@@ -10905,7 +10909,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                           className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
                         >
                           <option value="">-- Choose Booking --</option>
-                          {bookings.filter(b => b.status === 'CheckedIn' && b.branch === branch).map(b => (
+                          {branchBookings.filter(b => b.status === 'CheckedIn').map(b => (
                             <option key={b.id} value={b.id}>
                               Room {b.roomNumber} - {b.guestName}
                             </option>

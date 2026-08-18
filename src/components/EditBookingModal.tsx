@@ -182,6 +182,17 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
         if (db) {
           try {
             await safeSetDoc(doc(db, 'bookings', booking.id), updatedBooking, { merge: true });
+
+            if (proposedRoom.id !== booking.roomId && (booking.status === 'CheckedIn' || (booking.status as string) === 'checked_in')) {
+              try {
+                if (booking.roomId) {
+                  await updateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available' });
+                }
+                await updateDoc(doc(db, 'rooms', proposedRoom.id), { status: 'Occupied' });
+              } catch (rErr) {
+                console.warn("Room status update warning during direct edit:", rErr);
+              }
+            }
             
             const q = query(collection(db, 'RoomRevenue'), where('bookingId', '==', booking.id));
             const querySnapshot = await getDocs(q);
