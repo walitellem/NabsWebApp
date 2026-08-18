@@ -37,7 +37,8 @@ import { parseSafeDate } from '../utils/formatters';
 import { getThemeClasses, getRoomStatusClasses } from '../utils/theme';
 import { db, auth, firebaseConfig, isFirebaseConfigured, safeSetDoc, safeUpdateDoc, safeAddDoc, safeDeleteDoc, safeRunTransaction } from '../firebase';
 import { checkAndCreateSnapshot } from '../lib/snapshotUtils';
-import { doc, setDoc, getDoc, deleteDoc, addDoc, updateDoc, collection, query, where, onSnapshot, getDocs, writeBatch, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, addDoc, updateDoc, collection, query, where, onSnapshot, getDocs, writeBatch, serverTimestamp, runTransaction, deleteField } from 'firebase/firestore';
+import { computeEffectiveRoomStatus, isBookingForRoom, getActiveBookingForRoom } from '../utils/roomUtils';
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { 
@@ -1561,16 +1562,11 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     if (!rooms || rooms.length === 0 || !bookings) return;
     
     rooms.forEach(r => {
-      const hasActiveCheckedIn = bookings.some(b => 
-        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
-        (b.branch === r.branch || !b.branch) && 
-        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-      );
-
-      if (hasActiveCheckedIn && r.status !== 'Occupied') {
+      const activeBooking = getActiveBookingForRoom(r, bookings, rooms);
+      if (activeBooking && r.status !== 'Occupied') {
         if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
-      } else if (!hasActiveCheckedIn && r.status === 'Occupied') {
-        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available' }, { merge: true }).catch(() => {});
+      } else if (!activeBooking && (r.status === 'Occupied' || (r as any).guestName)) {
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() }, { merge: true }).catch(() => {});
       }
     });
   }, [rooms, bookings]);
@@ -3321,13 +3317,7 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     const revenue = baseLodgingRevenue + extensionRevenue + activityRevenue + barRevenue;
 
     const totalRmsCount = branchRooms.length;
-    const occupiedCount = branchRooms.filter(r => 
-      bookings.some(b => 
-        (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && 
-        (b.branch === branch || !b.branch) && 
-        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-      )
-    ).length;
+    const occupiedCount = branchRooms.filter(r => computeEffectiveRoomStatus(r, bookings, rooms) === 'Occupied').length;
     const maintenanceCount = branchRooms.filter(r => r.status === 'Maintenance').length;
     const occupancyRate = totalRmsCount > 0 ? (occupiedCount / totalRmsCount) * 100 : 0;
 
@@ -5258,12 +5248,9 @@ const theme = getThemeClasses(isDarkMode);
                       if (!room) return null;
                       const amenities = Array.isArray(room.amenities) ? room.amenities : [];
                       const roomPriceVal = typeof room.price === 'number' ? room.price : Number(room.price || 0);
-                      const isRoomOccupied = room.status === 'Occupied' || !!room.guestName || bookings.some(b => 
-                        (b.roomId === room.id || String(b.roomNumber) === String(room.roomNumber)) && 
-                        (b.branch === room.branch || !b.branch) && 
-                        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-                      );
-                      const roomStatusVal = isRoomOccupied ? 'Occupied' : (room.status || 'Available');
+                      const effectiveStatus = computeEffectiveRoomStatus(room, bookings, rooms);
+                      const isRoomOccupied = effectiveStatus === 'Occupied';
+                      const roomStatusVal = effectiveStatus;
                       const roomBranchVal = room.branch || 'Annex';
                       const roomNumVal = room.roomNumber || '';
                       const roomTypeVal = room.roomType || 'Standard';
@@ -7187,14 +7174,7 @@ const theme = getThemeClasses(isDarkMode);
                 {/* Live Summary Stat Cards */}
                 {(() => {
                   const getLiveEffectiveStatus = (r: Room): RoomStatus => {
-                    const hasActiveCheckedIn = bookings.some(b => 
-                      (b.roomId === r.id || String(b.roomNumber) === String(r.roomNumber)) && 
-                      (b.branch === r.branch || !b.branch) && 
-                      (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-                    );
-                    if (hasActiveCheckedIn) return 'Occupied';
-                    if (r.status === "Occupied") return "Available";
-                    return r.status || 'Available';
+                    return computeEffectiveRoomStatus(r, bookings, rooms);
                   };
 
                   const scopeRooms = liveViewBranchFilter === 'ALL' ? rooms : rooms.filter(r => r.branch === liveViewBranchFilter);
@@ -8220,7 +8200,7 @@ const theme = getThemeClasses(isDarkMode);
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 pt-2 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto p-6 pt-2 pr-3 custom-inset-scrollbar">
                 <form id="rec-form" onSubmit={handleSaveReceptionist} className="space-y-4 text-xs">
                 <div>
                   <label className={`block text-xs font-mono uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
@@ -8382,7 +8362,7 @@ const theme = getThemeClasses(isDarkMode);
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 pt-2 scrollbar-thin scroll-smooth">
+              <div className="flex-1 overflow-y-auto p-6 pt-2 pr-3 custom-inset-scrollbar">
                 <form id="room-form" onSubmit={handleSaveRoom} className="space-y-4 text-xs">
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -9788,7 +9768,7 @@ const theme = getThemeClasses(isDarkMode);
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                  <div className="flex-1 overflow-y-auto p-6 pr-3 custom-inset-scrollbar">
                     <div className={`p-4 rounded-2xl border mb-6 grid grid-cols-2 gap-4 ${
                       isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-blue-50/30 border-blue-100'
                     }`}>

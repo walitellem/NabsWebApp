@@ -185,7 +185,7 @@ export const TransferRoomModal: React.FC<TransferRoomModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 space-y-5 overflow-y-auto">
+        <div className="p-5 pr-3 space-y-5 overflow-y-auto max-h-[75vh] custom-inset-scrollbar">
           {/* Current Status */}
           <div className={`p-4 rounded-xl border ${theme.panel} flex items-center justify-between`}>
             <div>

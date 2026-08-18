@@ -8,7 +8,8 @@ import {
 import { User, Room, PendingEditRequest, Booking } from '../types';
 import { getRooms, getBookings } from '../data';
 import { db, isFirebaseConfigured, safeSetDoc } from '../firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteField } from 'firebase/firestore';
+import { computeEffectiveRoomStatus, isBookingForRoom } from '../utils/roomUtils';
 
 interface WelcomeViewProps {
   currentUser: User;
@@ -34,13 +35,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
     let currentBookings: Booking[] = getBookings();
 
     const getRoomEffectiveStatus = (room: Room, bookingsList: Booking[]): string => {
-      const isOccupied = room.status === 'Occupied' || !!room.guestName || bookingsList.some(b => 
-        (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-        (b.branch === room.branch || !b.branch) && 
-        (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-      );
-      if (isOccupied) return 'Occupied';
-      return room.status || 'Available';
+      return computeEffectiveRoomStatus(room, bookingsList, currentRooms);
     };
 
     const updateAvailableRooms = (roomsList: Room[], bookingsList: Booking[]) => {
@@ -57,15 +52,11 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
       // Auto-heal: Ensure Firestore room status perfectly matches ground-truth active checked-in bookings
       if (isFirebaseConfigured && db && currentUser.role === 'Manager') {
         roomsList.forEach(r => {
-          const hasActiveCheckedIn = bookingsList.some(b => 
-            (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
-            (b.branch === r.branch || !b.branch) && 
-            (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-          );
+          const hasActiveCheckedIn = bookingsList.some(b => isBookingForRoom(b, r, roomsList));
           if (hasActiveCheckedIn && r.status !== 'Occupied') {
             safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
-          } else if (!hasActiveCheckedIn && r.status === 'Occupied') {
-            safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available' }, { merge: true }).catch(() => {});
+          } else if (!hasActiveCheckedIn && (r.status === 'Occupied' || (r as any).guestName)) {
+            safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() }, { merge: true }).catch(() => {});
           }
         });
       }

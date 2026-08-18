@@ -310,7 +310,7 @@ export function GettingStartedModal({ isOpen, onClose, currentUser, isDarkMode }
           </div>
 
           {/* Interactive Steps Content */}
-          <div className="p-6 md:p-8 min-h-[320px] flex flex-col justify-between">
+          <div className="p-6 md:p-8 min-h-[320px] flex flex-col justify-between overflow-y-auto max-h-[75vh] pr-4 custom-inset-scrollbar flex-1">
             <AnimatePresence mode="wait">
               <motion.div
                 key={`${selectedRole}_step_${currentStep}`}

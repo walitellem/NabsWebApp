@@ -500,12 +500,12 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className={`relative border rounded-[2rem] p-6 w-full max-w-xl shadow-2xl relative max-h-[92vh] overflow-y-auto scrollbar-thin ${
+        className={`relative border rounded-[2rem] p-6 w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh] ${
           isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 rounded-2xl bg-blue-600/10 text-blue-500">
               <RefreshCw className="w-5 h-5" />
@@ -525,7 +525,7 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 pt-4">
+        <form onSubmit={handleSubmit} className="space-y-5 pt-4 pr-3 overflow-y-auto max-h-[75vh] custom-inset-scrollbar flex-1">
 
           {/* Section 1: Non-Revenue Guest Details */}
           <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-950/70 border-zinc-850' : 'bg-slate-50 border-slate-200'}`}>

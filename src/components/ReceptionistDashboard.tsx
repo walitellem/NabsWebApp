@@ -26,7 +26,8 @@ import { useToast } from './ToastContext';
 import { DateRangePicker } from './DateRangePicker';
 import { getThemeClasses, getRoomStatusClasses } from '../utils/theme';
 import { db, auth, handleFirestoreError, OperationType, isFirebaseConfigured, safeSetDoc, safeUpdateDoc, safeAddDoc, safeDeleteDoc } from '../firebase';
-import { doc, setDoc, collection, query, where, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, onSnapshot, serverTimestamp, writeBatch, deleteField } from 'firebase/firestore';
+import { computeEffectiveRoomStatus, isBookingForRoom, getActiveBookingForRoom } from '../utils/roomUtils';
 import { RoomBookingCalendar } from './RoomBookingCalendar';
 import { FutureStayCalendar } from './FutureStayCalendar';
 import { QuickAvailabilityCalendar } from './QuickAvailabilityCalendar';
@@ -3953,9 +3954,17 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
           });
         }
 
-        await setDoc(doc(db, 'rooms', selectedBooking.roomId), {
-          status: checkoutNextStatus
-        }, { merge: true });
+        const allLocalRooms = [...rooms, ...otherBranchRooms];
+        const targetRoom = allLocalRooms.find(rm => rm.id === selectedBooking.roomId || (String(rm.roomNumber) === String(selectedBooking.roomNumber) && rm.branch === (selectedBooking.branch || branch)));
+        const targetRoomId = targetRoom?.id || selectedBooking.roomId;
+
+        if (targetRoomId) {
+          await setDoc(doc(db, 'rooms', targetRoomId), {
+            status: checkoutNextStatus,
+            guestName: deleteField(),
+            currentBookingId: deleteField()
+          }, { merge: true });
+        }
 
         const logId = `log_${Math.random().toString(36).substring(2, 11)}`;
         const feeDetails = applyLateCheckOutFee ? ` (Late checkout fee of GH₵${lateCheckOutFee} applied. New total: GH₵${finalTotalPrice})` : '';
@@ -4138,25 +4147,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   };
 
   const getRoomEffectiveStatus = (room: Room): RoomStatus => {
-    const normalizedRoomId = String(room.id || "").trim().toLowerCase();
-    const normalizedRoomNum = String(room.roomNumber || "").trim().toLowerCase();
-
-    const activeBooking = bookings.find(b => {
-      const isActive = b.status === "CheckedIn" || b.status === "checked_in";
-      const effectiveBookingBranch = b.branch || branch;
-      const isSameBranch = effectiveBookingBranch === room.branch;
-      
-      if (!isActive || !isSameBranch) return false;
-
-      const bookedRoomIds = String(b.roomId || "").split(",").map(r => r.trim().toLowerCase()).filter(r => r !== "");
-      const bookedRoomNums = String(b.roomNumber || "").split(",").map(r => r.trim().toLowerCase()).filter(r => r !== "");
-
-      return bookedRoomIds.includes(normalizedRoomId) || bookedRoomNums.includes(normalizedRoomNum);
-    });
-
-    if (activeBooking) return "Occupied";
-    if (room.status === "Occupied") return "Available";
-    return room.status || "Available";
+    return computeEffectiveRoomStatus(room, bookings, [...rooms, ...otherBranchRooms]);
   };
 
 
@@ -9584,7 +9575,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto ${
+              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
               }`}
             >
@@ -9887,7 +9878,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto ${
+              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
               }`}
             >
@@ -9974,7 +9965,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto ${
+              className={`border rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
               }`}
             >
@@ -10279,7 +10270,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                 Verify and log the exact amounts collected during your shift before handing over the funds to the manager. Completing this will log the handover and sign you out of your shift.
               </p>
 
-              <div className="space-y-4 flex-1 overflow-y-auto pr-2">
+              <div className="space-y-4 flex-1 overflow-y-auto pr-3 max-h-[75vh] custom-inset-scrollbar">
                 <div>
                   <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
                     Handed Over Cash (GH₵)
@@ -10378,7 +10369,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className={`border rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto scrollbar-thin scroll-smooth ${
+              className={`border rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar scroll-smooth ${
                 theme.tableContainer
               }`}
             >
@@ -10790,7 +10781,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl relative max-h-[92vh] overflow-y-auto scrollbar-thin ${
+              className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl relative max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
@@ -10934,11 +10925,14 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                             className={`block w-full px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${theme.input}`}
                           >
                             <option value="">-- Select Room --</option>
-                            {dynamicRooms.filter(r => r.status === 'Occupied' || r.guestName).map(r => (
-                              <option key={r.roomNumber} value={r.roomNumber}>
-                                Room {r.roomNumber} ({r.guestName || 'Occupied'})
-                              </option>
-                            ))}
+                            {dynamicRooms.filter(r => getRoomEffectiveStatus(r) === 'Occupied').map(r => {
+                              const activeB = getActiveBookingForRoom(r, bookings, [...rooms, ...otherBranchRooms]);
+                              return (
+                                <option key={r.roomNumber} value={r.roomNumber}>
+                                  Room {r.roomNumber} ({activeB?.guestName || r.guestName || 'Occupied'})
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       )}
@@ -11396,7 +11390,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative ${theme.tableContainer} max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent cursor-default`}
+              className={`border rounded-3xl p-6 w-full max-w-md shadow-2xl relative ${theme.tableContainer} max-h-[85vh] overflow-y-auto pr-3 custom-inset-scrollbar cursor-default`}
             >
               <div className="absolute top-5 right-5 flex items-center gap-2">
                 <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 border border-zinc-700/50">
@@ -11505,11 +11499,14 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                     className={`w-full px-3 py-2 rounded-xl border text-xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all ${theme.input}`}
                   >
                     <option value="">-- Non-Resident / Walk-In --</option>
-                    {dynamicRooms.filter(r => r.status === 'Occupied').map(r => (
-                      <option key={r.roomNumber} value={r.roomNumber}>
-                        Room {r.roomNumber} ({r.guestName})
-                      </option>
-                    ))}
+                    {dynamicRooms.filter(r => getRoomEffectiveStatus(r) === 'Occupied').map(r => {
+                      const activeB = getActiveBookingForRoom(r, bookings, [...rooms, ...otherBranchRooms]);
+                      return (
+                        <option key={r.roomNumber} value={r.roomNumber}>
+                          Room {r.roomNumber} ({activeB?.guestName || r.guestName || 'Occupied'})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 

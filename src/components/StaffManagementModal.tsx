@@ -176,7 +176,7 @@ export function StaffManagementModal({ isOpen, onClose, isDarkMode }: StaffManag
               </button>
             </form>
 
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-2 scrollbar-thin">
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-3 custom-inset-scrollbar">
               <AnimatePresence mode="popLayout">
                 {staff.map(s => (
                   <motion.div 

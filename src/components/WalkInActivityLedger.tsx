@@ -681,7 +681,7 @@ export const WalkInActivityLedger: React.FC<WalkInActivityLedgerProps> = ({
               </div>
 
               <form onSubmit={handleSaveActivity} className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto p-6 pr-3 space-y-4 custom-inset-scrollbar">
               <div>
                 <label className={`block text-[10px] font-mono uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
                   Select Service / Activity *
@@ -860,7 +860,7 @@ export const WalkInActivityLedger: React.FC<WalkInActivityLedgerProps> = ({
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-2xl my-8 overflow-y-auto max-h-[95vh] scrollbar-thin"
+              className="relative w-full max-w-2xl my-8 overflow-y-auto max-h-[85vh] pr-3 custom-inset-scrollbar"
             >
               <div
                 id="walkin-receipt-card"

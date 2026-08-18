@@ -92,9 +92,9 @@ export const PaymentRectificationModal: React.FC<PaymentRectificationModalProps>
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+        className={`relative border rounded-[2rem] p-6 w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
       >
-        <div className="flex justify-between items-center pb-4 border-b border-zinc-100 dark:border-zinc-800 mb-4">
+        <div className="flex justify-between items-center pb-4 border-b border-zinc-100 dark:border-zinc-800 mb-4 shrink-0">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
               <DollarSign className="w-5 h-5" />
@@ -110,7 +110,7 @@ export const PaymentRectificationModal: React.FC<PaymentRectificationModalProps>
             <X className="w-5 h-5"/>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pr-2 overflow-y-auto max-h-[75vh] custom-inset-scrollbar flex-1">
           <div>
             <label className={`block text-[10px] font-mono uppercase tracking-wider font-bold mb-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>Proposed Status</label>
             <select 
