@@ -76,9 +76,11 @@ export const QuickAvailabilityCalendar: React.FC<QuickAvailabilityCalendarProps>
         const d = String(curr.getDate()).padStart(2, '0');
         const dateStr = `${y}-${m}-${d}`;
 
-        // Map for exact roomId and also raw roomNumber match
+        // Map for exact roomId and also branch + roomNumber match
         map[`${rId}_${dateStr}`] = b;
-        map[`${b.roomNumber}_${dateStr}`] = b;
+        if (b.branch && b.roomNumber) {
+          map[`${b.branch.toLowerCase()}_${b.roomNumber}_${dateStr}`] = b;
+        }
 
         curr.setDate(curr.getDate() + 1);
       }
@@ -104,7 +106,8 @@ export const QuickAvailabilityCalendar: React.FC<QuickAvailabilityCalendarProps>
 
     if (selectedRoomId !== 'ALL') {
       const targetRoom = rooms.find(r => r.id === selectedRoomId || r.roomNumber === selectedRoomId);
-      const matchedBooking = bookingMap[`${selectedRoomId}_${dateStr}`] || (targetRoom ? bookingMap[`${targetRoom.roomNumber}_${dateStr}`] : undefined);
+      const bBranch = targetRoom?.branch?.toLowerCase() || '';
+      const matchedBooking = bookingMap[`${selectedRoomId}_${dateStr}`] || (targetRoom ? (bookingMap[`${targetRoom.id}_${dateStr}`] || bookingMap[`${bBranch}_${targetRoom.roomNumber}_${dateStr}`]) : undefined);
       const isBooked = !!matchedBooking;
       const tileKey = `${selectedRoomId}_${dateStr}`;
 

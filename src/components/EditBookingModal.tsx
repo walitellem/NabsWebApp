@@ -9,7 +9,7 @@ import { motion } from 'motion/react';
 import { X, AlertTriangle, ShieldCheck, CheckCircle, Clock, DollarSign, Calendar, UserCheck, RefreshCw } from 'lucide-react';
 import { useToast } from './ToastContext';
 import { db, safeSetDoc } from '../firebase';
-import { doc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch, deleteField } from 'firebase/firestore';
 import { addAuditLog, generateId, getBookings, saveBookings, getFormattedDateTime } from '../data';
 
 interface EditBookingModalProps {
@@ -186,9 +186,9 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
             if (proposedRoom.id !== booking.roomId && (booking.status === 'CheckedIn' || (booking.status as string) === 'checked_in')) {
               try {
                 if (booking.roomId) {
-                  await updateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available' });
+                  await updateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() });
                 }
-                await updateDoc(doc(db, 'rooms', proposedRoom.id), { status: 'Occupied' });
+                await updateDoc(doc(db, 'rooms', proposedRoom.id), { status: 'Occupied', guestName: guestName, currentBookingId: booking.id });
               } catch (rErr) {
                 console.warn("Room status update warning during direct edit:", rErr);
               }

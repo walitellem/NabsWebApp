@@ -3,9 +3,10 @@ import { Booking, Room, User } from '../types';
 import { motion } from 'motion/react';
 import { X, ArrowRight, Home, CreditCard, Info } from 'lucide-react';
 import { db } from '../firebase';
-import { doc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, collection, query, where, getDocs, writeBatch, deleteField } from 'firebase/firestore';
 import { addAuditLog, getFormattedDateTime, getBookings } from '../data';
 import { useToast } from './ToastContext';
+import { computeEffectiveRoomStatus, isBookingForRoom } from '../utils/roomUtils';
 
 interface TransferRoomModalProps {
   booking: Booking;
@@ -59,7 +60,7 @@ export const TransferRoomModal: React.FC<TransferRoomModalProps> = ({
   
   const availableRooms = rooms.filter(r => 
     r.branch === booking.branch && 
-    r.status !== 'Occupied' &&
+    computeEffectiveRoomStatus(r, bookings, rooms) !== 'Occupied' &&
     isRoomAvailableForRemainingStay(r.id)
   );
   
@@ -128,11 +129,15 @@ export const TransferRoomModal: React.FC<TransferRoomModalProps> = ({
       });
 
       // 3. Mark old room available, new room occupied
-      const oldRoomRef = doc(db, 'rooms', booking.roomId);
-      batch.update(oldRoomRef, { status: 'Available' });
+      const oldRoom = rooms.find(rm => rm.id === booking.roomId || (rm.roomNumber === booking.roomNumber && rm.branch === booking.branch));
+      const oldRoomId = oldRoom?.id || booking.roomId;
+      if (oldRoomId) {
+        const oldRoomRef = doc(db, 'rooms', oldRoomId);
+        batch.update(oldRoomRef, { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() });
+      }
 
       const newRoomRef = doc(db, 'rooms', selectedRoom.id);
-      batch.update(newRoomRef, { status: 'Occupied' });
+      batch.update(newRoomRef, { status: 'Occupied', guestName: booking.guestName, currentBookingId: booking.id });
 
       await batch.commit();
 

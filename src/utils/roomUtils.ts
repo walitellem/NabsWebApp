@@ -23,11 +23,21 @@ export function isBookingForRoom(booking: Booking, room: Room, allRooms: Room[] 
     }
   }
 
-  // If booking branch is known, it MUST match the room's branch
-  if (bookingBranch) {
-    if (bookingBranch.toLowerCase() !== normRoomBranch) {
-      return false;
-    }
+  // Infer branch from roomId string if present (e.g., "room_ayigya_101")
+  if (!bookingBranch && booking.roomId) {
+    const lowId = String(booking.roomId).toLowerCase();
+    if (lowId.includes('ayigya')) bookingBranch = 'Ayigya';
+    else if (lowId.includes('annex')) bookingBranch = 'Annex';
+  }
+
+  // Fallback for legacy records without branch metadata: default to Annex
+  if (!bookingBranch) {
+    bookingBranch = 'Annex';
+  }
+
+  // Crucial check: If booking branch does not match room branch, fail immediately
+  if (bookingBranch.toLowerCase() !== normRoomBranch) {
+    return false;
   }
 
   // 2. Check room ID or room number match

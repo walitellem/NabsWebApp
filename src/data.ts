@@ -6,6 +6,7 @@
 import { User, Room, Booking, AuditLog, Branch, RoomStatus, BookingStatus, PaymentStatus, Role, StaffUpdateInput, GlobalSettings, HandoverRecord, HandoverItemBreakdown, DrinkItem, DrinkSale } from './types';
 import { db, safeSetDoc, safeUpdateDoc, safeDeleteDoc } from './firebase';
 import { doc } from 'firebase/firestore';
+import { isBookingForRoom } from './utils/roomUtils';
 
 const USERS_KEY = 'nabslodge_users';
 const HANDOVERS_KEY = 'nabslodge_handovers';
@@ -1331,10 +1332,7 @@ export const updateRoomStatus = (
   if (room.status === 'Occupied' && status !== 'Occupied') {
     // Check if there's actually an active guest preventing the status change
     const bookings = getBookings();
-    const hasActiveGuest = bookings.some(b => 
-      (b.roomId === roomId || (String(b.roomNumber) === String(room.roomNumber) && (b.branch === room.branch || (!b.branch && room.branch === 'Annex')))) && 
-      (b.status === 'CheckedIn' || (b.status as string) === 'checked_in')
-    );
+    const hasActiveGuest = bookings.some(b => isBookingForRoom(b, room, rooms));
     if (hasActiveGuest) {
       return { success: false, error: 'Cannot change status of occupied room. Please complete guest check-out first.' };
     }

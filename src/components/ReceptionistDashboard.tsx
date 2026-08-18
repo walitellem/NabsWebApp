@@ -471,16 +471,17 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   }, [bookings, branch]);
 
   const dynamicRooms = useMemo(() => {
+    const allLocalRooms = [...rooms, ...otherBranchRooms];
     return rooms.map(r => {
-      const activeBooking = bookings.find(b => 
-        (b.roomId === r.id || (b.roomNumber && String(b.roomNumber) === String(r.roomNumber))) && 
-        (b.status === 'CheckedIn' || b.status === 'checked_in') && 
-        (b.branch === r.branch || !b.branch || b.branch === branch)
-      );
-      const isOccupied = !!activeBooking;
-      return { ...r, status: isOccupied ? 'Occupied' : r.status };
+      const effectiveStatus = computeEffectiveRoomStatus(r, bookings, allLocalRooms);
+      const activeBooking = getActiveBookingForRoom(r, bookings, allLocalRooms);
+      return { 
+        ...r, 
+        status: effectiveStatus, 
+        guestName: activeBooking?.guestName || (effectiveStatus === 'Occupied' ? r.guestName : undefined) 
+      };
     });
-  }, [rooms, bookings, branch]);
+  }, [rooms, otherBranchRooms, bookings]);
 
   // Removed auto-healing effect as it was incorrectly overriding manual status.
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -3741,7 +3742,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       alert(`Room ${room.roomNumber} belongs to ${room.branch || (branch === 'Annex' ? 'Ayigya' : 'Annex')} branch and is view-only. You cannot process check-outs across branches.`);
       return;
     }
-    const activeBook = bookings.find(b => (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && b.status === 'CheckedIn');
+    const activeBook = getActiveBookingForRoom(room, bookings, [...rooms, ...otherBranchRooms]);
     if (activeBook) {
       setSelectedBooking(activeBook);
       setCheckoutSuccess(false);
@@ -4024,11 +4025,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       return;
     }
 
-    const activeBooking = bookings.find(b => 
-      (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-      (b.status === 'CheckedIn' || b.status === 'checked_in') && 
-      (b.branch === room.branch || !b.branch || b.branch === branch)
-    );
+    const activeBooking = getActiveBookingForRoom(room, bookings, [...rooms, ...otherBranchRooms]);
 
     if (activeBooking && newStatus !== 'Occupied') {
       alert('Cannot change status of occupied room with an active guest. Please complete guest check-out first.');
@@ -5412,11 +5409,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                             );
                           })
                           .map((room) => {
-                            const activeBooking = bookings.find(b => 
-                              (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-                              b.status === 'CheckedIn' && 
-                              (b.branch === room.branch || !b.branch || b.branch === branch)
-                            ) || null;
+                            const activeBooking = getActiveBookingForRoom(room, bookings, [...rooms, ...otherBranchRooms]);
                             const effectiveStatus = getRoomEffectiveStatus(room);
                             const isOccupied = effectiveStatus === 'Occupied';
                             const isMaintenance = effectiveStatus === 'Maintenance';
@@ -5571,11 +5564,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                       );
                     })
                     .map((room) => {
-                      const activeBooking = bookings.find(b => 
-                        (b.roomId === room.id || (b.roomNumber && String(b.roomNumber) === String(room.roomNumber))) && 
-                        b.status === 'CheckedIn' && 
-                        (b.branch === room.branch || !b.branch || b.branch === branch)
-                      ) || null;
+                      const activeBooking = getActiveBookingForRoom(room, bookings, [...rooms, ...otherBranchRooms]);
                       const effectiveStatus = getRoomEffectiveStatus(room);
                       const isOccupied = effectiveStatus === 'Occupied';
                       const isMaintenance = effectiveStatus === 'Maintenance';
@@ -6185,6 +6174,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
                         <RoomBookingCalendar
                           roomId={resRoomId}
+                          branch={branch}
                           bookings={bookings}
                           checkInDate={resCheckIn}
                           checkOutDate={resCheckOut}
@@ -7214,6 +7204,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
                           <RoomBookingCalendar
                             roomId={selectedRoom?.id || ""}
+                            branch={selectedRoom?.branch || branch}
                             bookings={bookings}
                             checkInDate={checkInDate}
                             checkOutDate={checkOutDate}
@@ -9705,6 +9696,7 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
 
                         <RoomBookingCalendar
                           roomId={resRoomId}
+                          branch={branch}
                           bookings={bookings}
                           checkInDate={resCheckIn}
                           checkOutDate={resCheckOut}

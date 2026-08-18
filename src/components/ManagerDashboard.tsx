@@ -534,9 +534,9 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
           if (req.proposedRoomId && req.proposedRoomId !== booking.roomId && (booking.status === 'CheckedIn' || (booking.status as string) === 'checked_in')) {
             try {
               if (booking.roomId) {
-                await safeUpdateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available' });
+                await safeUpdateDoc(doc(db, 'rooms', booking.roomId), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() });
               }
-              await safeUpdateDoc(doc(db, 'rooms', req.proposedRoomId), { status: 'Occupied' });
+              await safeUpdateDoc(doc(db, 'rooms', req.proposedRoomId), { status: 'Occupied', guestName: booking.guestName, currentBookingId: booking.id });
             } catch (rErr) {
               console.warn("Room status update warning during edit approval:", rErr);
             }
@@ -747,10 +747,14 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
         const isCurrentlyCheckedIn = targetBooking ? (targetBooking.status === 'CheckedIn' || (targetBooking.status as string) === 'checked_in') : false;
 
         if (oldRoom && db) {
-          await safeUpdateDoc(doc(db, 'rooms', oldRoom.id), { status: 'Available' });
+          await safeUpdateDoc(doc(db, 'rooms', oldRoom.id), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() });
         }
         if (newRoom && db) {
-          await safeUpdateDoc(doc(db, 'rooms', newRoom.id), { status: isCurrentlyCheckedIn ? 'Occupied' : 'Available' });
+          await safeUpdateDoc(doc(db, 'rooms', newRoom.id), { 
+            status: isCurrentlyCheckedIn ? 'Occupied' : 'Available',
+            guestName: isCurrentlyCheckedIn ? targetBooking?.guestName : deleteField(),
+            currentBookingId: isCurrentlyCheckedIn ? targetBooking?.id : deleteField()
+          });
         }
 
         const updatedRooms = rooms.map(r => {
@@ -1564,7 +1568,7 @@ export function ManagerDashboard({ currentUser, onLogout, isDarkMode, onToggleTh
     rooms.forEach(r => {
       const activeBooking = getActiveBookingForRoom(r, bookings, rooms);
       if (activeBooking && r.status !== 'Occupied') {
-        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied' }, { merge: true }).catch(() => {});
+        if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied', guestName: activeBooking.guestName, currentBookingId: activeBooking.id }, { merge: true }).catch(() => {});
       } else if (!activeBooking && (r.status === 'Occupied' || (r as any).guestName)) {
         if (db) safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() }, { merge: true }).catch(() => {});
       }
@@ -7330,9 +7334,7 @@ const theme = getThemeClasses(isDarkMode);
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {branchRooms.map(room => {
                                       const effectiveStatus = getLiveEffectiveStatus(room);
-                                      const activeBooking = effectiveStatus === 'Occupied' 
-                                        ? bookings.find(b => (b.roomId === room.id || String(b.roomNumber) === String(room.roomNumber)) && (b.branch === room.branch || !b.branch) && (b.status === 'CheckedIn' || (b.status as string) === 'checked_in'))
-                                        : null;
+                                      const activeBooking = getActiveBookingForRoom(room, bookings, rooms);
 
                                       return (
                                         <div

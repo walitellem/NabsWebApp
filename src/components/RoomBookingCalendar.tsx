@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-reac
 
 interface RoomBookingCalendarProps {
   roomId: string;
+  branch?: string;
   bookings: Booking[];
   checkInDate: string;
   checkOutDate: string;
@@ -13,6 +14,7 @@ interface RoomBookingCalendarProps {
 
 export const RoomBookingCalendar: React.FC<RoomBookingCalendarProps> = ({
   roomId,
+  branch,
   bookings,
   checkInDate,
   checkOutDate,
@@ -24,16 +26,15 @@ export const RoomBookingCalendar: React.FC<RoomBookingCalendarProps> = ({
 
   // Get active, confirmed bookings for the selected room
   const activeBookings = bookings.filter(
-    (b) =>
-      (b.roomId === roomId || 
-       b.roomNumber === roomId || 
-       `Room ${b.roomNumber}` === roomId ||
-       b.roomId === `room_annex_${roomId}` ||
-       b.roomId === `room_ayigya_${roomId}`) &&
-      b.status !== 'CheckedOut' &&
-      b.status !== 'checked_out' &&
-      b.status !== 'Cancelled' &&
-      b.status !== 'cancelled'
+    (b) => {
+      const isInactive = b.status === 'CheckedOut' || b.status === 'checked_out' || b.status === 'Cancelled' || b.status === 'cancelled';
+      if (isInactive) return false;
+      if (b.roomId && b.roomId === roomId) return true;
+      if (branch && b.branch && b.branch !== branch) return false;
+
+      const cleanRoomNum = roomId.replace(/^Room\s+/i, '');
+      return String(b.roomNumber) === String(cleanRoomNum);
+    }
   );
 
   const startOfDay = (date: Date | string) => {
