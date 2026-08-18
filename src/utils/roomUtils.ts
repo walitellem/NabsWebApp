@@ -40,12 +40,50 @@ export function isBookingForRoom(booking: Booking, room: Room, allRooms: Room[] 
     return false;
   }
 
-  // 2. Check room ID or room number match
+  // 2. Room ID or Room Number matching with strict composite room protection
   const bookedRoomIds = String(booking.roomId || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  const bookedRoomNums = String(booking.roomNumber || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
-  if (bookedRoomIds.includes(normRoomId)) return true;
-  if (bookedRoomNums.includes(normRoomNum)) return true;
+  // If booking has valid roomId(s), match primarily by roomId
+  if (bookedRoomIds.length > 0) {
+    if (bookedRoomIds.includes(normRoomId)) return true;
+
+    // If booking's roomId matches a known room in allRooms, then booking explicitly references another room ID
+    const matchesKnownRoomId = allRooms.some(r => bookedRoomIds.includes(String(r.id || '').trim().toLowerCase()));
+    if (matchesKnownRoomId) {
+      return false;
+    }
+  }
+
+  // Fallback or secondary check using room numbers
+  const normBookingRoomNum = String(booking.roomNumber || '').replace(/\s+/g, '').toLowerCase();
+  const normTargetRoomNum = normRoomNum.replace(/\s+/g, '').toLowerCase();
+
+  // Exact room number string match (e.g., "401,402,403" === "401,402,403" or "401" === "401")
+  if (normBookingRoomNum && normBookingRoomNum === normTargetRoomNum) {
+    return true;
+  }
+
+  // Check if any room in the same branch is a composite room whose roomNumber exactly equals booking.roomNumber
+  if (allRooms.length > 0) {
+    const sameBranchRooms = allRooms.filter(r => String(r.branch || 'Annex').trim().toLowerCase() === normRoomBranch);
+    const hasExactCompositeRoom = sameBranchRooms.some(r => {
+      const rNumNorm = String(r.roomNumber || '').replace(/\s+/g, '').toLowerCase();
+      return rNumNorm === normBookingRoomNum;
+    });
+
+    // If an exact composite room exists for this booking's roomNumber (e.g. "401,402,403"), 
+    // but the target room's roomNumber is not that exact string (e.g., target room is "401"),
+    // then this booking belongs strictly to the composite room, NOT to the individual sub-room!
+    if (hasExactCompositeRoom) {
+      return false;
+    }
+  }
+
+  // Sub-room / multi-room split matching only if no exact composite room exists
+  const bookedRoomNums = String(booking.roomNumber || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (bookedRoomNums.includes(normRoomNum)) {
+    return true;
+  }
 
   return false;
 }

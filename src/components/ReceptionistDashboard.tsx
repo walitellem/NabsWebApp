@@ -17,7 +17,7 @@ import {
 import { sendActivityInvoiceViaGmail, parseSafeDate } from '../utils/formatters';
 import { 
   LogOut, UserPlus, Wrench, Plus, Bed, Calendar, Phone, CheckCircle, Clock, Grid, Filter, 
-  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, ArrowRight, Wine, Building2, Globe, HelpCircle,
+  Search, Receipt, PlusCircle, Printer, Download, UserCheck, UserMinus, Info, AlertTriangle, Shield, MapPin, X, Sun, Moon, Sliders, RefreshCw, LayoutGrid, Table, Menu, ChevronLeft, ChevronRight, Lock, Unlock, ShieldCheck, Edit2, Trash2, ArrowRight, Wine, Building2, Globe, HelpCircle, Bell, Copy,
   User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -542,6 +542,28 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
   const [searchFutureBookings, setSearchFutureBookings] = useState('');
   const [futureStatusFilter, setFutureStatusFilter] = useState<'All' | 'Active' | 'Pending Review' | 'Checked-In' | 'No Show' | 'Completed'>('All');
 
+  // Today's Expected Arrivals Notice State
+  const [showArrivalsModal, setShowArrivalsModal] = useState(false);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  }, []);
+
+  const todaysArrivals = useMemo(() => {
+    const currentBookings = getBookings();
+    return currentBookings.filter(b => {
+      if (!b.checkInDate) return false;
+      const bInStr = b.checkInDate.split('T')[0];
+      const isToday = bInStr === todayStr;
+      const matchesBranch = b.branch === branch || !b.branch;
+      const isPendingArrival = !['CheckedIn', 'CheckedOut', 'Cancelled', 'No Show'].includes(b.status);
+      return isToday && matchesBranch && isPendingArrival;
+    });
+  }, [bookings, branch, todayStr]);
+
   // Book Future Stay Modal State
   const [showFutureStayModal, setShowFutureStayModal] = useState(false);
   const [futureGuestName, setFutureGuestName] = useState('');
@@ -807,8 +829,8 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
       return;
     }
     const currentBookings = getBookings();
-    const found = currentBookings.find(b => 
-      (b.roomId === selectedRoom.id || (b.roomNumber && String(b.roomNumber) === String(selectedRoom.roomNumber))) && 
+    const found = getActiveBookingForRoom(selectedRoom, currentBookings, rooms) || currentBookings.find(b => 
+      b.roomId === selectedRoom.id && 
       (b.branch === branch || !b.branch) && 
       !['CheckedOut', 'Cancelled', 'No Show'].includes(b.status)
     );
@@ -4797,6 +4819,21 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setShowArrivalsModal(true)}
+                  className={`px-4 py-2.5 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-md flex items-center gap-2 relative ${
+                    todaysArrivals.length > 0
+                      ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-amber-500/20'
+                      : isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}
+                  title="Click to view today's expected guest arrivals notice"
+                >
+                  <Bell className={`w-4 h-4 ${todaysArrivals.length > 0 ? 'animate-bounce text-slate-950' : 'text-amber-500'}`} />
+                  <span>Expected Arrivals ({todaysArrivals.length})</span>
+                  {todaysArrivals.length > 0 && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white dark:border-zinc-900 absolute -top-1 -right-1" />
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     // Pre-fill defaults
@@ -11737,6 +11774,126 @@ export function ReceptionistDashboard({ currentUser, onLogout, isDarkMode, onTog
                   className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-600/20 disabled:opacity-50 cursor-pointer active:scale-95"
                 >
                   {isProcessingEditSale ? 'Deleting...' : 'Delete Permanently'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- TODAY'S EXPECTED ARRIVALS NOTICE MODAL --- */}
+      <AnimatePresence>
+        {showArrivalsModal && (
+          <div 
+            className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[75] backdrop-blur-sm overflow-y-auto"
+            onClick={() => setShowArrivalsModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`border rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden ${theme.tableContainer} relative`}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-5 border-b border-zinc-200 dark:border-zinc-800 bg-amber-500/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className={`font-extrabold text-base tracking-tight ${isDarkMode ? 'text-zinc-50' : 'text-slate-900'}`}>
+                      Today's Expected Arrivals Notice
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Pending arrivals scheduled for today ({todayStr}) at <strong className="text-amber-500">{branch} Branch</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowArrivalsModal(false)}
+                  className="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6 space-y-3.5 max-h-[65vh] overflow-y-auto">
+                {todaysArrivals.length === 0 ? (
+                  <div className="text-center py-10">
+                    <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3 opacity-80" />
+                    <h4 className={`font-bold text-sm ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                      No Pending Arrivals Today
+                    </h4>
+                    <p className="text-xs text-zinc-500 max-w-xs mx-auto mt-1">
+                      All scheduled guests for today have either checked in or there are no pending arrivals on the calendar for this branch.
+                    </p>
+                  </div>
+                ) : (
+                  todaysArrivals.map((b) => {
+                    const r = rooms.find(rm => rm.id === b.roomId || String(rm.roomNumber) === String(b.roomNumber));
+                    const phone = b.guestContact || b.guestPhone || '';
+                    return (
+                      <div
+                        key={b.id}
+                        className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                          isDarkMode ? 'bg-zinc-900/80 border-zinc-800' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                              {r ? (r.roomType === '2 Bedroom Apartment' || r.roomType === '3 Bedroom Apartment' ? r.title : `Room ${r.roomNumber}`) : `Room ${b.roomNumber}`}
+                            </span>
+                            <span className={`text-sm font-extrabold ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
+                              {b.guestName}
+                            </span>
+                          </div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-2 flex-wrap">
+                            <span>Stay: <strong>{b.checkInDate?.split('T')[0]}</strong> to <strong>{b.checkOutDate?.split('T')[0]}</strong></span>
+                            <span>•</span>
+                            <span>Payment: <strong className="text-blue-500">{b.paymentStatus || 'Pending'}</strong></span>
+                          </div>
+                        </div>
+
+                        {phone ? (
+                          <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-200 dark:border-zinc-800">
+                            <a
+                              href={`tel:${phone}`}
+                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>{phone}</span>
+                            </a>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(phone);
+                                addToast('Phone Copied', 'info', `Copied ${phone} to clipboard`, 2500);
+                              }}
+                              className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                              title="Copy Phone Number"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-zinc-400 italic">No phone provided</span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex justify-between items-center text-xs text-zinc-500">
+                <span>Call guests to confirm arrival time</span>
+                <button
+                  onClick={() => setShowArrivalsModal(false)}
+                  className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Close Notice
                 </button>
               </div>
             </motion.div>

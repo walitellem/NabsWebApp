@@ -137,7 +137,7 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({
       if (b.status === 'Cancelled' || b.status === 'No Show' || b.status === 'CheckedOut' || b.status === 'checked_out') return false;
       
       // Check if it's the target room
-      const isSameRoom = b.roomId === proposedRoom.id || String(b.roomNumber) === String(proposedRoom.roomNumber);
+      const isSameRoom = b.roomId ? b.roomId === proposedRoom.id : String(b.roomNumber) === String(proposedRoom.roomNumber);
       if (!isSameRoom) return false;
 
       const existStartStr = b.checkInDate ? b.checkInDate.split('T')[0] : '';
