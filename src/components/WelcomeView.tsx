@@ -1,0 +1,470 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { 
+  LogOut, Sun, Moon, LayoutDashboard, UserCircle, 
+  ArrowRight, ShieldCheck, Hotel, Calendar, Briefcase,
+  Key, ClipboardList
+} from 'lucide-react';
+import { User, Room, PendingEditRequest, Booking } from '../types';
+import { generateKey } from '../utils/keyGenerator';
+import { getRooms, getBookings } from '../data';
+import { db, isFirebaseConfigured, safeSetDoc } from '../firebase';
+import { collection, onSnapshot, doc, deleteField } from 'firebase/firestore';
+import { computeEffectiveRoomStatus, isBookingForRoom, getActiveBookingForRoom } from '../utils/roomUtils';
+
+interface WelcomeViewProps {
+  currentUser: User;
+  onLogout: () => void;
+  onGoToDashboard: () => void;
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
+}
+
+export const WelcomeView: React.FC<WelcomeViewProps> = ({
+  currentUser,
+  onLogout,
+  onGoToDashboard,
+  isDarkMode,
+  onToggleTheme
+}) => {
+  const [mainAvailableRooms, setMainAvailableRooms] = useState<string[]>([]);
+  const [annexAvailableRooms, setAnnexAvailableRooms] = useState<string[]>([]);
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  useEffect(() => {
+    let currentRooms: Room[] = getRooms();
+    let currentBookings: Booking[] = getBookings();
+
+    const getRoomEffectiveStatus = (room: Room, bookingsList: Booking[]): string => {
+      return computeEffectiveRoomStatus(room, bookingsList, currentRooms);
+    };
+
+    const updateAvailableRooms = (roomsList: Room[], bookingsList: Booking[]) => {
+      const main = roomsList
+        .filter(r => r.branch === 'Ayigya' && getRoomEffectiveStatus(r, bookingsList) === 'Available')
+        .map(r => r.roomNumber);
+      const annex = roomsList
+        .filter(r => r.branch === 'Annex' && getRoomEffectiveStatus(r, bookingsList) === 'Available')
+        .map(r => r.roomNumber);
+
+      setMainAvailableRooms(main);
+      setAnnexAvailableRooms(annex);
+
+      // Auto-heal: Ensure Firestore room status perfectly matches ground-truth active checked-in bookings
+      if (isFirebaseConfigured && db && currentUser.role === 'Manager') {
+        roomsList.forEach(r => {
+          const activeB = getActiveBookingForRoom(r, bookingsList, roomsList);
+          const hasActiveCheckedIn = !!activeB;
+          if (hasActiveCheckedIn && r.status !== 'Occupied') {
+            safeSetDoc(doc(db, 'rooms', r.id), { status: 'Occupied', guestName: activeB.guestName, currentBookingId: activeB.id }, { merge: true }).catch(() => {});
+          } else if (!hasActiveCheckedIn && (r.status === 'Occupied' || (r as any).guestName)) {
+            safeSetDoc(doc(db, 'rooms', r.id), { status: 'Available', guestName: deleteField(), currentBookingId: deleteField() }, { merge: true }).catch(() => {});
+          }
+        });
+      }
+    };
+
+    // Initial calculation from baseline data
+    updateAvailableRooms(currentRooms, currentBookings);
+
+    // Initial local pending edits fallback
+    try {
+      const storedEdits = localStorage.getItem('nabslodge_pending_edits');
+      if (storedEdits) {
+        const edits: PendingEditRequest[] = JSON.parse(storedEdits);
+        setPendingRequests(edits.filter(e => e.status === 'Pending').length);
+      }
+    } catch {}
+
+    if (!isFirebaseConfigured || !db) return;
+
+    // Real-time Firestore snapshot listeners
+    const unsubRooms = onSnapshot(collection(db, 'rooms'), (snapshot) => {
+      const roomsData: Room[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() || {};
+        roomsData.push({
+          id: d.id,
+          roomNumber: String(data.roomNumber || ''),
+          roomType: String(data.roomType || 'Standard'),
+          price: Number(data.price) || 0,
+          status: data.status || 'Available',
+          branch: data.branch || 'Annex',
+          amenities: data.amenities || [],
+          description: data.description || '',
+          maxGuests: data.maxGuests || 2
+        });
+      });
+      currentRooms = roomsData;
+      updateAvailableRooms(currentRooms, currentBookings);
+    }, (err) => console.warn("WelcomeView rooms subscription error:", err));
+
+    const unsubBookings = onSnapshot(collection(db, 'bookings'), (snapshot) => {
+      const bookingsData: Booking[] = [];
+      snapshot.forEach((d) => {
+        bookingsData.push({ id: d.id, ...d.data() } as Booking);
+      });
+      currentBookings = bookingsData;
+      updateAvailableRooms(currentRooms, currentBookings);
+    }, (err) => console.warn("WelcomeView bookings subscription error:", err));
+
+    const unsubEdits = onSnapshot(collection(db, 'pendingEditRequests'), (snapshot) => {
+      const editsData: PendingEditRequest[] = [];
+      snapshot.forEach((d) => {
+        editsData.push({ id: d.id, ...d.data() } as PendingEditRequest);
+      });
+      setPendingRequests(editsData.filter(e => e.status === 'Pending').length);
+    }, (err) => console.warn("WelcomeView pending edits subscription error:", err));
+
+    return () => {
+      unsubRooms();
+      unsubBookings();
+      unsubEdits();
+    };
+  }, [currentUser]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
+  return (
+    <div className={`min-h-screen w-full flex flex-col font-sans transition-colors duration-300 ${
+      isDarkMode ? 'bg-[#0d1527] text-white' : 'bg-[#e6eaf0] text-slate-900'
+    }`}>
+      {/* Header */}
+      <header className="w-full max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+            <Hotel className="text-white w-6 h-6" />
+          </div>
+          <span className="font-display font-bold text-xl tracking-tight">Nabs Lodge</span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onToggleTheme}
+            className={`p-2.5 rounded-full transition-all ${
+              isDarkMode 
+                ? 'neu-button text-amber-400' 
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-200 shadow-sm'
+            }`}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          
+          <button
+            onClick={onLogout}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${
+              isDarkMode 
+                ? 'neu-button text-red-400' 
+                : 'bg-red-50 text-red-600 hover:bg-red-100 shadow-xs'
+            }`}
+          >
+            <LogOut size={14} />
+            Log Out
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col justify-center py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="space-y-12"
+        >
+          {/* Hero Section */}
+          <div className="space-y-4">
+            <motion.span 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+              className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                isDarkMode ? 'bg-amber-500/10 text-amber-500' : 'bg-amber-50 text-amber-600'
+              }`}
+            >
+              System Access Granted
+            </motion.span>
+            
+            <h1 className="text-5xl md:text-7xl font-display font-black tracking-tighter leading-[0.9]">
+              {getGreeting()}, <br />
+              <span className="text-amber-500">{currentUser?.name || 'User'}.</span>
+            </h1>
+            
+            <p className={`text-lg md:text-xl max-w-xl font-medium leading-relaxed ${
+              isDarkMode ? 'text-zinc-400' : 'text-slate-500'
+            }`}>
+              Welcome to your centralized management hub. Select your module below to begin managing Nabs Lodge operations.
+            </p>
+          </div>
+
+          {/* Quick Access Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onGoToDashboard}
+              className={`group relative p-8 rounded-3xl transition-all cursor-pointer flex flex-col justify-between h-full ${
+                isDarkMode 
+                  ? 'neu-raised-lg hover:neu-glow-amber' 
+                  : 'bg-white border border-slate-200 hover:border-amber-500/50 shadow-xl shadow-slate-200/50'
+              }`}
+            >
+              <div className="flex flex-col space-y-6">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+                  isDarkMode ? 'neu-inset text-amber-400' : 'bg-amber-50 text-amber-500'
+                }`}>
+                  <LayoutDashboard size={28} />
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-display font-bold tracking-tight">Main Dashboard</h3>
+                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                    Access room bookings, check-ins, financial reports, and real-time activity logs for the current session.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-6 flex items-center text-xs font-black uppercase tracking-widest text-amber-500 gap-2">
+                Launch Module <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+              </div>
+            </motion.div>
+
+            <div className="flex flex-col gap-6">
+              <div className={`p-6 rounded-3xl ${
+                isDarkMode ? 'neu-raised-sm' : 'bg-slate-50/50 border border-slate-100'
+              }`}>
+                <div className="flex items-center gap-4 opacity-90">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                    isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-500'
+                  }`}>
+                    <UserCircle size={24} />
+                  </div>
+                  
+                  <div className="space-y-1 w-full">
+                    <h3 className="text-base font-display font-bold tracking-tight">Session Info</h3>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-emerald-500" />
+                        <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-300' : 'text-slate-600'}`}>
+                          {currentUser.role}
+                        </span>
+                      </div>
+                      {currentUser.branch && (
+                        <div className="flex items-center gap-1.5">
+                          <Briefcase size={14} className="text-amber-500" />
+                          <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-300' : 'text-slate-600'}`}>
+                            {currentUser.branch}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <Calendar size={14} className="text-purple-500" />
+                        <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-300' : 'text-slate-600'}`}>
+                          {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {currentUser.role === 'Manager' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full">
+                  <div className={`p-5 rounded-3xl flex flex-col justify-start space-y-3 relative overflow-hidden ${
+                    isDarkMode ? 'neu-inset' : 'bg-emerald-50/50 border border-emerald-100'
+                  } max-h-[180px]`}>
+                    <div className="flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Key size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Available Rooms</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span>Scanning</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-500/20 pr-1">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Ayigya Lodge ({mainAvailableRooms.length})
+                          </span>
+                        </div>
+                        {mainAvailableRooms.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {mainAvailableRooms.map((r, i) => (
+                              <span 
+                                key={generateKey(r, i, 'ayigya')} 
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                    : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                }`}
+                              >
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`text-[10px] italic ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>No rooms available</div>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Annex Lodge ({annexAvailableRooms.length})
+                          </span>
+                        </div>
+                        {annexAvailableRooms.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {annexAvailableRooms.map((r, i) => (
+                              <span 
+                                key={generateKey(r, i, 'annex')} 
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                    : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                }`}
+                              >
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`text-[10px] italic ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>No rooms available</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`p-5 rounded-3xl flex flex-col justify-center space-y-3 ${
+                    isDarkMode ? 'neu-inset' : 'bg-amber-50/50 border border-amber-100'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <ClipboardList size={16} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>Pending</span>
+                    </div>
+                    <div className="flex flex-col flex-1 justify-center">
+                      <div className="flex items-baseline gap-2">
+                        <span className={`text-4xl font-black font-display leading-none ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                          {pendingRequests}
+                        </span>
+                        <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>Requests</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-full">
+                  <div className={`p-5 rounded-3xl border flex flex-col justify-start space-y-3 relative overflow-hidden ${
+                    isDarkMode ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-emerald-50/50 border-emerald-100'
+                  } max-h-[180px]`}>
+                    <div className="flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Key size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          Available Rooms
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span>Scanning</span>
+                      </div>
+                    </div>
+                    
+                    {(() => {
+                      const branchRooms = currentUser.branch === 'Ayigya' ? mainAvailableRooms : annexAvailableRooms;
+                      return (
+                        <div className="space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-500/20 pr-1">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              {currentUser.branch || 'Current'} Lodge ({branchRooms.length})
+                            </span>
+                          </div>
+                          {branchRooms.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {branchRooms.map((r, i) => (
+                                <span 
+                                  key={generateKey(r, i, 'rec-room')} 
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border transition-all ${
+                                    isDarkMode 
+                                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                      : 'bg-emerald-100/80 border-emerald-300/80 text-emerald-800 shadow-xs'
+                                  }`}
+                                >
+                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                  </span>
+                                  {r}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className={`text-[10px] italic ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>No rooms currently available</div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className={`p-5 rounded-3xl border flex flex-col justify-center space-y-3 ${
+                    isDarkMode ? 'bg-blue-500/5 border-blue-500/10' : 'bg-blue-50/50 border-blue-100'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                      </span>
+                      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                        Branch Sync
+                      </span>
+                    </div>
+                    <div className="flex flex-col flex-1 justify-center space-y-1">
+                      <div className="text-sm font-bold tracking-tight text-zinc-800 dark:text-zinc-200">
+                        {currentUser.branch || 'Branch'} Portal Active
+                      </div>
+                      <p className={`text-[11px] leading-tight ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                        Real-time synchronization connected & ready for operations.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </main>
+
+      {/* Footer Decoration */}
+      <footer className={`py-8 text-center text-[10px] font-medium tracking-[0.2em] uppercase opacity-40 ${
+        isDarkMode ? 'text-white' : 'text-slate-900'
+      }`}>
+        Nabs Lodge Management System v3.2.0 • {new Date().getFullYear()}
+      </footer>
+    </div>
+  );
+};
+
+// Removed default export for build stability
