@@ -1,0 +1,98 @@
+src/components/ToastContext.tsx:80:           <ToastItem key={generateKey(toast.id, idx, 'toast')} toast={toast} onDismiss={onDismiss} />
+src/components/WelcomeView.tsx:305:                                 key={generateKey(r, i, 'ayigya')} 
+src/components/WelcomeView.tsx:335:                                 key={generateKey(r, i, 'annex')} 
+src/components/WelcomeView.tsx:409:                                   key={generateKey(r, i, 'rec-room')} 
+src/components/AuthDiagnosticView.tsx:144:             <div key={i} className={`
+src/components/TransferRoomModal.tsx:226:                   <option key={generateKey(r.id || r.roomNumber, idx, 'transfer-rm')} value={r.id}>Room {r.roomNumber} - {r.roomType} (GH₵{r.price}/night)</option>
+src/components/GettingStartedModal.tsx:317:                 key={generateKey(selectedRole, currentStep, 'step')}
+src/components/GettingStartedModal.tsx:347:                     <div key={generateKey(currentStepData.title, idx, 'highlight')} className="flex items-start gap-2.5">
+src/components/GettingStartedModal.tsx:390:                       key={generateKey('step-dot', idx, 'dot')}
+src/components/WalkInActivityLedger.tsx:613:                   <tr key={generateKey(tx.id || idx, idx, 'walkin')} className={`transition-colors ${isDarkMode ? 'hover:bg-zinc-800/40' : 'hover:bg-slate-50'}`}>
+src/components/WalkInActivityLedger.tsx:699:                     <option key={generateKey(item.id || item.name, idx, 'act-item')} value={item.name}>
+src/components/StaffManagementModal.tsx:185:                     key={generateKey(s.id || s.name, idx, 'staff-item')}
+src/components/ManagerDashboard.tsx:4195:                   <div key={generateKey(anomaly.id || idx, idx, 'anomaly')} className="bg-white/60 dark:bg-zinc-900/40 p-3 rounded-lg flex items-start gap-3 border border-rose-100 dark:border-rose-900/30">
+src/components/ManagerDashboard.tsx:4283:             key={generateKey(notification.id || idx, idx, 'snap-notif')} 
+src/components/ManagerDashboard.tsx:4511:                       <div key={generateKey('branch-comparison', idx, 'skeleton')} className={`border p-5 rounded-2xl animate-pulse space-y-4 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'}`}>
+src/components/ManagerDashboard.tsx:4522:                             <div key={generateKey('branch-metrics', i, 'skeleton')} className="flex justify-between">
+src/components/ManagerDashboard.tsx:4718:                               key={generateKey(rec.id, idx, 'rec')} 
+src/components/ManagerDashboard.tsx:5126:                             <tr key={generateKey(rec.id, idx, 'rec')} className={`transition-colors ${isDarkMode ? 'hover:bg-zinc-900/50' : 'hover:bg-slate-50'}`}>
+src/components/ManagerDashboard.tsx:5224:                           key={generateKey(filter, filter, 'room-filter')}
+src/components/ManagerDashboard.tsx:5290:                           key={generateKey((room.id || room.roomNumber) + '-' + (room.branch || ''), idx, 'mgr-room')}
+src/components/ManagerDashboard.tsx:5332:                                   <span key={generateKey(a, idx, 'amenity-list')} className="text-[9px] font-bold px-2 py-0.5 rounded-lg border bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
+src/components/ManagerDashboard.tsx:5791:                                 <tr key={generateKey(item.id || item.name, idx, 'act-cat')} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+src/components/ManagerDashboard.tsx:5966:                                   <tr key={generateKey(drink.id || drink.name, index, 'mgr-drink')} className={`${isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-slate-50'} transition-colors`}>
+src/components/ManagerDashboard.tsx:6633:                               <tr key={generateKey(b.id || idx, idx, 'mgr-booking-row')} className={`hover:bg-zinc-800/10 transition-colors ${
+src/components/ManagerDashboard.tsx:6743:                           key={generateKey(f, f, 'pending-edit-filter')}
+src/components/ManagerDashboard.tsx:6780:                           key={generateKey(req.id || idx, idx, 'edit-req')}
+src/components/ManagerDashboard.tsx:7303:                               <option key={generateKey(t as string, idx, 'room-type')} value={t}>{t}</option>
+src/components/ManagerDashboard.tsx:7347:                                 <div key={generateKey(branchName, branchName, 'branch-div')} className="space-y-4">
+src/components/ManagerDashboard.tsx:7367:                                           key={generateKey((room.id || room.roomNumber) + '-' + (room.branch || ''), idx, 'live-room')}
+src/components/ManagerDashboard.tsx:7480:                                                     <span key={generateKey(room.id || room.roomNumber, idx, 'amenity')} className={`px-1.5 py-0.5 text-[9px] rounded ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-600'}`}>
+src/components/ManagerDashboard.tsx:7714:                             <option key={generateKey(u.id, idx, 'usr-opt')} value={u.id}>{u.name}</option>
+src/components/ManagerDashboard.tsx:7825:                               <tr key={generateKey(h.id, idx, 'handover')} className={`border-b last:border-0 ${isDarkMode ? 'border-zinc-800/60' : 'border-slate-100'} transition-colors ${theme.tableRowHover}`}>
+src/components/ManagerDashboard.tsx:7954:                               <tr key={generateKey(data.month, index, 'monthly-rev')} className={`border-b last:border-0 ${isDarkMode ? 'border-zinc-800/60' : 'border-slate-100'} transition-colors ${theme.tableRowHover}`}>
+src/components/ManagerDashboard.tsx:8037:                               <option key={generateKey(y, y, 'year-opt')} value={y}>{y}</option>
+src/components/ManagerDashboard.tsx:8140:                                   <tr key={generateKey(report.monthName, idx, 'report')} className={`border-b last:border-0 ${isDarkMode ? 'border-zinc-800/60' : 'border-slate-100'} transition-colors ${theme.tableRowHover}`}>
+src/components/ManagerDashboard.tsx:8440:                           key={generateKey(t || idx, idx, 'room-type-preset')}
+src/components/ManagerDashboard.tsx:8642:                               key={generateKey(amenity, idx, 'amenity-pill')} 
+src/components/ManagerDashboard.tsx:8902:                           <div key={generateKey(branch.name, i, 'branch-perf')} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-zinc-200">
+src/components/ManagerDashboard.tsx:8952:                                 <tr key={generateKey(entry.col1, idx, 'item')} className="border-b last:border-0 border-zinc-150 dark:border-zinc-800/50 hover:bg-zinc-50/50">
+src/components/ManagerDashboard.tsx:9401:                         key={generateKey(tab.id, tab.id, 'audit-tab')}
+src/components/ManagerDashboard.tsx:9460:                                 <tr key={generateKey(item.id, idx, 'item')} className={`border-b transition-colors ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/40' : 'border-slate-100 hover:bg-slate-50'} ${isDeletion ? (isDarkMode ? 'bg-red-500/10' : 'bg-red-50') : ''}`}>
+src/components/ManagerDashboard.tsx:9601:                           <div key={generateKey(item.id, idx, 'item')} className={`py-3 border-b last:border-0 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} ${isDeletion ? (isDarkMode ? 'bg-red-500/10' : 'bg-red-50') : ''}`}>
+src/components/ManagerDashboard.tsx:9842:                             key={generateKey(rev.id || idx, idx, 'audit-rev')} 
+src/components/EditBookingModal.tsx:615:                     <option key={generateKey(r.id || r.roomNumber, idx, 'edit-room-opt')} value={r.id}>
+src/components/ReceptionistDashboard.tsx:4602:             ? <span key={generateKey(query, i, 'highlight')} className="bg-purple-500/30 text-purple-600 dark:text-purple-400 font-black px-0.5 rounded">{part}</span> 
+src/components/ReceptionistDashboard.tsx:4603:             : <span key={generateKey(query, i, 'highlight')}>{part}</span>
+src/components/ReceptionistDashboard.tsx:4934:                   key={generateKey(st, idx, 'item')}
+src/components/ReceptionistDashboard.tsx:5029:                             <tr key={generateKey(b.id, idx, 'active-row')} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
+src/components/ReceptionistDashboard.tsx:5170:                       key={generateKey(b.id, idx, 'overdue-checkout')}
+src/components/ReceptionistDashboard.tsx:5421:                             <tr key={generateKey(idx, idx, 'skel-row')} className="animate-pulse">
+src/components/ReceptionistDashboard.tsx:5474:                               <tr key={generateKey((room.id || room.roomNumber) + '-' + (room.branch || ''), idx, 'room-tr')} className={`transition-colors ${radarClasses ? radarClasses : theme.tableRowHover}`}>
+src/components/ReceptionistDashboard.tsx:5499:                                       <span key={generateKey(a, idx, 'amenity')} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${isDarkMode ? 'bg-zinc-950 text-emerald-500 border-emerald-900/30' : 'bg-white text-emerald-600 border-emerald-200'}`}>
+src/components/ReceptionistDashboard.tsx:5573:                       <div key={generateKey(idx, idx, 'skel-card')} className={`${theme.card} p-5 space-y-4 animate-pulse`}>
+src/components/ReceptionistDashboard.tsx:5621:                           key={generateKey((room.id || room.roomNumber) + '-' + (room.branch || ''), idx, 'room-grid')}
+src/components/ReceptionistDashboard.tsx:5792:                                       <span key={generateKey(room.id || room.roomNumber, idx, 'amenity')} className={`px-2 py-0.5 rounded-md text-[9px] font-bold border ${
+src/components/ReceptionistDashboard.tsx:6016:                           <option key={generateKey(r.id || r.roomNumber, idx, 'res-room')} value={r.id}>
+src/components/ReceptionistDashboard.tsx:6435:                             <tr key={generateKey(b.id, idx, 'todays-booking')} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+src/components/ReceptionistDashboard.tsx:6667:                         <tr key={generateKey(b.id, idx, 'filtered-booking')} className={`transition-colors ${theme.tableRowHover}`}>
+src/components/ReceptionistDashboard.tsx:6922:                           <div key={generateKey(drink.id || drink.name, index, 'rec-drink')} className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+src/components/ReceptionistDashboard.tsx:7323:                             <option key={generateKey(m, idx, 'month')} value={m}>{m}</option>
+src/components/ReceptionistDashboard.tsx:7350:                           <option key={generateKey(num, idx, 'guest-opt')} value={num}>{num} {num === '1' ? 'Guest' : 'Guests'}</option>
+src/components/ReceptionistDashboard.tsx:7704:                               <div key={generateKey(sale.id, idx, 'sale')} className="flex justify-between">
+src/components/ReceptionistDashboard.tsx:7857:                               <div key={generateKey(sale.id, idx, 'sale')} className="flex justify-between">
+src/components/ReceptionistDashboard.tsx:8125:                       <option key={generateKey(rm.id || rm.roomNumber, idx, 'fut-rm')} value={rm.id}>
+src/components/ReceptionistDashboard.tsx:8334:                               <option key={generateKey(m, idx, 'month')} value={m}>{m}</option>
+src/components/ReceptionistDashboard.tsx:8361:                             <option key={generateKey(num, idx, 'fut-guest-opt')} value={num}>{num} {num === '1' ? 'Guest' : 'Guests'}</option>
+src/components/ReceptionistDashboard.tsx:9195:                                           <li key={generateKey(s.id || s.drinkName || idx, idx, 'unpaid-drink')}>{s.drinkName} (x{s.quantity})</li>
+src/components/ReceptionistDashboard.tsx:9633:                       <option key={generateKey(r.id || r.roomNumber, idx, 'dyn-rm')} value={r.id}>Room {r.roomNumber} - {r.roomType} (GH₵{r.price}/night)</option>
+src/components/ReceptionistDashboard.tsx:9954:                           <div key={generateKey(b.id, idx, 'multi-lodge-history')} className={`p-3 rounded-xl border flex justify-between items-center ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-white border-slate-100 shadow-xs'}`}>
+src/components/ReceptionistDashboard.tsx:10025:                     <div key={generateKey(room.id || room.roomNumber, idx, 'maint-room')} className={`border rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-zinc-950 border-zinc-850' : 'bg-white border-slate-200 shadow-sm'}`}>
+src/components/ReceptionistDashboard.tsx:10492:                           <option key={generateKey(item.id || item.name, idx, 'act-cat-opt')} value={item.name}>
+src/components/ReceptionistDashboard.tsx:10842:                         key={generateKey(type, idx, 'item')}
+src/components/ReceptionistDashboard.tsx:10927:                             <option key={generateKey(b.id, idx, 'b-opt')} value={b.id}>
+src/components/ReceptionistDashboard.tsx:10954:                                 <option key={generateKey(r.roomNumber || r.id, idx, 'r-num-opt')} value={r.roomNumber}>
+src/components/ReceptionistDashboard.tsx:11051:                                           key={generateKey(s.id, idx, 'staff-btn')}
+src/components/ReceptionistDashboard.tsx:11136:                           <option key={generateKey(d.id, idx, 'drink-opt')} value={d.id}>
+src/components/ReceptionistDashboard.tsx:11169:                         <div key={generateKey(item.drinkId || item.drinkName || idx, idx, 'cart-item')} className={`flex justify-between items-center p-2 rounded-lg ${isDarkMode ? 'bg-zinc-900/50' : 'bg-zinc-50'}`}>
+src/components/ReceptionistDashboard.tsx:11473:                       <option key={generateKey(d.id, idx, 'edit-drink')} value={d.id}>
+src/components/ReceptionistDashboard.tsx:11528:                         <option key={generateKey(r.roomNumber || r.id, idx, 'edit-rm')} value={r.roomNumber}>
+src/components/ReceptionistDashboard.tsx:11840:                         key={generateKey(b.id || idx, idx, 'arrival-card')}
+src/components/BestSellingDrinks.tsx:34:             <div key={generateKey(drink.id || drink.name, index, 'best-drink')} className="flex justify-between items-center text-xs">
+src/components/DrinkSalesLedger.tsx:538:                       <option key={generateKey(staff.id || staff.name || idx, idx, 'staff-opt')} value={staff.id}>
+src/components/DrinkSalesLedger.tsx:645:                   key={generateKey(preset, idx, 'preset')}
+src/components/DrinkSalesLedger.tsx:772:                       key={generateKey(sale.id || sale.serialNumber || idx, idx, 'sale-row')} 
+src/components/DrinkSalesLedger.tsx:857:                               <div key={generateKey(item.drinkId, idx, 'item')} className="text-xs font-semibold">
+src/components/DrinkSalesLedger.tsx:1083:                             key={generateKey(selectedSaleForDetails.id, item.drinkId || item.drinkName || idx, 'sale-item')} 
+src/components/FutureStayCalendar.tsx:147:     dayCells.push(<div key={generateKey(i, i, 'fut-empty')} className="h-9 w-9" />);
+src/components/FutureStayCalendar.tsx:211:         key={generateKey(`${currentDate.getFullYear()}-${currentDate.getMonth()}`, day, 'fut-day')}
+src/components/FutureStayCalendar.tsx:285:           <div key={generateKey(wd, idx, 'wd')} className="h-5 flex items-center justify-center">
+src/components/QuickAvailabilityCalendar.tsx:97:     dayCells.push(<div key={generateKey(i, i, 'q-empty')} className="min-h-[90px] p-1 border border-zinc-100 dark:border-zinc-800/40 opacity-30 bg-zinc-50/50 dark:bg-zinc-950/40 rounded-xl" />);
+src/components/QuickAvailabilityCalendar.tsx:117:           key={generateKey(selectedRoomId, year + '-' + month + '-' + day, 'q-day-single')}
+src/components/QuickAvailabilityCalendar.tsx:197:           key={generateKey(`${year}-${month}`, day, 'q-day')}
+src/components/QuickAvailabilityCalendar.tsx:232:                     key={generateKey(room.id || room.roomNumber, idx, 'q-room')}
+src/components/QuickAvailabilityCalendar.tsx:290:                 <option key={generateKey(r.id || r.roomNumber, idx, 'q-opt')} value={r.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+src/components/QuickAvailabilityCalendar.tsx:330:           <div key={generateKey(wd, idx, 'q-wd')} className="py-1">
+src/components/RoomBookingCalendar.tsx:156:     days.push(<div key={generateKey(i, i, 'rb-empty')} className="h-9 w-9" />);
+src/components/RoomBookingCalendar.tsx:203:         key={generateKey(`${currentDate.getFullYear()}-${currentDate.getMonth()}`, day, 'rb-day')}
+src/components/RoomBookingCalendar.tsx:266:           <div key={generateKey(wd, idx, 'rb-wd')} className="h-5 flex items-center justify-center">{wd}</div>
