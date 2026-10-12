@@ -1,0 +1,6 @@
+                  <button
+                    onClick={handleOpenAddRec}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-blue-500/5"
+                  >
+                    <Plus className="w-4 h-4" /> Create Receptionist
+                  </button>
