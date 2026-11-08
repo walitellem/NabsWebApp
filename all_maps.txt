@@ -1,0 +1,167 @@
+src/components/ToastContext.tsx:79:         {toasts.map((toast, idx) => (
+src/components/WelcomeView.tsx:45:         .map(r => r.roomNumber);
+src/components/WelcomeView.tsx:48:         .map(r => r.roomNumber);
+src/components/WelcomeView.tsx:303:                             {mainAvailableRooms.map((r, i) => (
+src/components/WelcomeView.tsx:333:                             {annexAvailableRooms.map((r, i) => (
+src/components/WelcomeView.tsx:407:                               {branchRooms.map((r, i) => (
+src/components/AuthDiagnosticView.tsx:143:           {logs.map((log, i) => (
+src/components/TransferRoomModal.tsx:225:                 {availableRooms.map((r, idx) => (
+src/components/GettingStartedModal.tsx:346:                   {currentStepData.highlights.map((highlight, idx) => (
+src/components/GettingStartedModal.tsx:388:                   {activeSteps.map((_, idx) => (
+src/components/LoginPortal.tsx:72:       .map(ip => ip.trim())
+src/components/WalkInActivityLedger.tsx:612:                 {filteredTransactions.map((tx, idx) => (
+src/components/WalkInActivityLedger.tsx:698:                   {activityCatalog.map((item, idx) => (
+src/components/StaffManagementModal.tsx:36:       setStaff(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffMember)));
+src/components/StaffManagementModal.tsx:182:                 {staff.map((s, idx) => (
+src/components/ManagerDashboard.tsx:278:       const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+src/components/ManagerDashboard.tsx:655:                 updatedLocalRevs = updatedLocalRevs.map(rev => {
+src/components/ManagerDashboard.tsx:714:                 updatedLocalRevs = updatedLocalRevs.map(rev => {
+src/components/ManagerDashboard.tsx:722:               updatedLocalRevs = updatedLocalRevs.map(rev => {
+src/components/ManagerDashboard.tsx:762:         const updatedRooms = rooms.map(r => {
+src/components/ManagerDashboard.tsx:784:       const updatedBookings = bookings.map(b => b.id === req.bookingId ? { ...b, ...updatedBookingFields } : b);
+src/components/ManagerDashboard.tsx:788:       const updatedRequests = pendingEditRequests.map(r => r.id === req.id ? {
+src/components/ManagerDashboard.tsx:840:       const updatedRequests = pendingEditRequests.map(r => r.id === req.id ? {
+src/components/ManagerDashboard.tsx:915:         setBookings(prev => prev.map(b => {
+src/components/ManagerDashboard.tsx:1036:       return handover.itemsBreakdown.map(item => {
+src/components/ManagerDashboard.tsx:1228:     const [year, month] = monthStr.split('-').map(Number);
+src/components/ManagerDashboard.tsx:1511:       ...roomRevenue.map(r => ({ ...r, amountVal: Number(r.amount || 0), timestamp: r.timestamp || r.dateCreated || r.createdAt })),
+src/components/ManagerDashboard.tsx:1517:     ...coreLodgeTransactions.map(t => ({
+src/components/ManagerDashboard.tsx:1523:     ...activityTransactions.map(a => ({
+src/components/ManagerDashboard.tsx:1530:     ...drinkSales.filter(s => !isDrinkSettledToRoom(s)).map(s => {
+src/components/ManagerDashboard.tsx:1651:       ...rooms.map(r => r.roomType),
+src/components/ManagerDashboard.tsx:1652:       ...bookings.map(b => b.roomType),
+src/components/ManagerDashboard.tsx:1653:       ...activityTransactions.map(a => a.serviceType || a.serviceName),
+src/components/ManagerDashboard.tsx:1660:       const categoryData = categories.map(cat => {
+src/components/ManagerDashboard.tsx:1719:       ...data.map(row => keys.map(k => `"${row[k]}"`).join(','))
+src/components/ManagerDashboard.tsx:1785:           const breakdownStr = printPreviewConfig.branchBreakdown.map(b => `${b.name}: GH₵ ${b.revenue.toLocaleString()} (${b.volume} bks)`).join("   |   ");
+src/components/ManagerDashboard.tsx:2284:         const updatedCatalog = activityCatalog.map(item => 
+src/components/ManagerDashboard.tsx:2385:     const updated = drinks.map(d => d.id === drinkId ? { ...d, inStock: !currentStock } : d);
+src/components/ManagerDashboard.tsx:2415:       const updatedDrinks = drinks.map(d =>
+src/components/ManagerDashboard.tsx:2485:       const updatedList = drinkSales.map(s => s.id === updatedSale.id ? updatedSale : s);
+src/components/ManagerDashboard.tsx:2801:     const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+src/components/ManagerDashboard.tsx:2869:       const updatedRoomsList = rooms.map(r => r.id === editingRoom.id ? updatedRoomObj : r);
+src/components/ManagerDashboard.tsx:3762:     return trendDays.map(targetDate => {
+src/components/ManagerDashboard.tsx:3864:     return months.map((m, i) => {
+src/components/ManagerDashboard.tsx:4194:                 {anomalies.map((anomaly, idx) => (
+src/components/ManagerDashboard.tsx:4281:         {snapshotNotifications.map((notification, idx) => (
+src/components/ManagerDashboard.tsx:4510:                     {Array.from({ length: 2 }).map((_, idx) => (
+src/components/ManagerDashboard.tsx:4521:                           {Array.from({ length: 5 }).map((_, i) => (
+src/components/ManagerDashboard.tsx:4713:                         users.map((rec, idx) => {
+src/components/ManagerDashboard.tsx:5125:                           users.map((rec, idx) => (
+src/components/ManagerDashboard.tsx:5222:                       {(['All', 'Annex', 'Ayigya'] as const).map((filter) => (
+src/components/ManagerDashboard.tsx:5277:                     .map((room, idx) => {
+src/components/ManagerDashboard.tsx:5331:                                 amenities.map((a, idx) => (
+src/components/ManagerDashboard.tsx:5790:                               {activityCatalog.map((item, idx) => (
+src/components/ManagerDashboard.tsx:5963:                               .map((drink, index) => {
+src/components/ManagerDashboard.tsx:6512:                             dataEntries: filtered.map(b => ({
+src/components/ManagerDashboard.tsx:6531:                           const rows = bookings.map(b => [
+src/components/ManagerDashboard.tsx:6545:                           let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.map(cell => `"${cell}"`).join(",")).join("\n");
+src/components/ManagerDashboard.tsx:6627:                           return filtered.map((b, idx) => {
+src/components/ManagerDashboard.tsx:6741:                       {(['Pending', 'Approved', 'Rejected', 'All'] as const).map(f => (
+src/components/ManagerDashboard.tsx:6778:                       return filtered.map((req, idx) => (
+src/components/ManagerDashboard.tsx:7302:                             {Array.from(new Set(rooms.map(r => r.roomType))).map((t, idx) => (
+src/components/ManagerDashboard.tsx:7339:                             {branchesToDisplay.map(branchName => {
+src/components/ManagerDashboard.tsx:7340:                               const branchRooms = filtered.filter(r => r.branch === branchName).map(r => {
+src/components/ManagerDashboard.tsx:7361:                                     {branchRooms.map((room, idx) => {
+src/components/ManagerDashboard.tsx:7479:                                                   {room.amenities.slice(0, 3).map((amenity, idx) => (
+src/components/ManagerDashboard.tsx:7672:                           const csvData = filteredHandovers.map(h => ({
+src/components/ManagerDashboard.tsx:7713:                           {users.map((u, idx) => (
+src/components/ManagerDashboard.tsx:7824:                             filteredHandovers.map((h, idx) => (
+src/components/ManagerDashboard.tsx:7916:                               dataEntries: financialData.monthlyData.map(d => ({
+src/components/ManagerDashboard.tsx:7953:                             {financialData.monthlyData.map((data, index) => (
+src/components/ManagerDashboard.tsx:8036:                             {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+src/components/ManagerDashboard.tsx:8076:                                 dataEntries: yearlyReports.map(r => ({
+src/components/ManagerDashboard.tsx:8139:                                 {yearlyReports.map((report, idx) => (
+src/components/ManagerDashboard.tsx:8438:                       {roomTypePresets.map((t, idx) => (
+src/components/ManagerDashboard.tsx:8640:                           {roomAmenities.map((amenity, idx) => (
+src/components/ManagerDashboard.tsx:8901:                         {printPreviewConfig.branchBreakdown.map((branch, i) => (
+src/components/ManagerDashboard.tsx:8951:                               {printPreviewConfig.dataEntries.slice(0, 15).map((entry, idx) => (
+src/components/ManagerDashboard.tsx:9399:                     ].map(tab => (
+src/components/ManagerDashboard.tsx:9452:                             filteredItems.map((item, idx) => {
+src/components/ManagerDashboard.tsx:9593:                       {filteredItems.map((item, idx) => {
+src/components/ManagerDashboard.tsx:9840:                         auditRevenues.map((rev, idx) => (
+src/components/EditBookingModal.tsx:346:         const updatedLocal = localBookings.map(b => b.id === booking.id ? updatedBooking : b);
+src/components/EditBookingModal.tsx:614:                   {rooms.map((r, idx) => (
+src/components/ReceptionistDashboard.tsx:477:     return rooms.map(r => {
+src/components/ReceptionistDashboard.tsx:641:     const [inHour, inMinute] = savedCheckInTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:652:     const [outHour, outMinute] = savedCheckOutTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:1118:         const updatedDrinkSalesList = drinkSales.map(s => {
+src/components/ReceptionistDashboard.tsx:1684:     const userAsStaff: StaffMember[] = allUsers.map(u => ({
+src/components/ReceptionistDashboard.tsx:1776:         const fetched = snapshot.docs.map((doc) => {
+src/components/ReceptionistDashboard.tsx:1810:         const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+src/components/ReceptionistDashboard.tsx:1825:         const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+src/components/ReceptionistDashboard.tsx:1905:         const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as import('../types').StaffMember));
+src/components/ReceptionistDashboard.tsx:1914:         const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as import('../types').User));
+src/components/ReceptionistDashboard.tsx:1954:       const [inHour, inMinute] = savedCheckInTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:1955:       const [outHour, outMinute] = savedCheckOutTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:2010:         return prev.map(item => item.drinkId === drink.id 
+src/components/ReceptionistDashboard.tsx:2086:       const drinkNames = drinkCart.map(i => `${i.drinkName} (x${i.quantity})`).join(', ');
+src/components/ReceptionistDashboard.tsx:2443:       const updatedList = drinkSales.map(s => s.id === updatedSale.id ? updatedSale : s);
+src/components/ReceptionistDashboard.tsx:2671:       const [inHour, inMinute] = savedCheckInTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:2672:       const [outHour, outMinute] = savedCheckOutTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:2706:     const [inHour, inMinute] = savedCheckInTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:2707:     const [outHour, outMinute] = savedCheckOutTime.split(':').map(Number);
+src/components/ReceptionistDashboard.tsx:3439:       setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'Cancelled', noShow: true } : b));
+src/components/ReceptionistDashboard.tsx:3444:         const updatedLocalBookings = localBookings.map(b => b.id === booking.id ? { ...b, status: 'Cancelled' as BookingStatus, noShow: true } : b);
+src/components/ReceptionistDashboard.tsx:3570:       setBookings(prev => prev.map(b => b.id === arrivalBooking.id ? updatedBooking : b));
+src/components/ReceptionistDashboard.tsx:3571:       setRooms(prev => prev.map(r => (r.id === targetRoomId || String(r.roomNumber) === String(arrivalBooking.roomNumber)) ? { ...r, status: 'Occupied' } : r));
+src/components/ReceptionistDashboard.tsx:3576:         const updatedLocalBookings = localBookings.map(b => b.id === arrivalBooking.id ? { ...b, ...updatedBooking } : b);
+src/components/ReceptionistDashboard.tsx:3580:         const updatedLocalRooms = localRooms.map(r => (r.id === targetRoomId || String(r.roomNumber) === String(arrivalBooking.roomNumber)) ? { ...r, status: 'Occupied' as RoomStatus } : r);
+src/components/ReceptionistDashboard.tsx:3948:           const updatedDrinkSalesList = drinkSales.map(s => {
+src/components/ReceptionistDashboard.tsx:4411:       ...stats.activeRoomRevs.map((r: any) => {
+src/components/ReceptionistDashboard.tsx:4470:       ...stats.activeWalkIns.map((w: any) => ({
+src/components/ReceptionistDashboard.tsx:4480:       ...stats.activeDrinkSales.map((s: any) => {
+src/components/ReceptionistDashboard.tsx:4498:       ...stats.activeDrinkSettlements.map((ds: any) => ({
+src/components/ReceptionistDashboard.tsx:4509:       ...logs.filter(l => isRecordInActiveShift(l) && l.userId === currentUser.id).map(l => ({
+src/components/ReceptionistDashboard.tsx:4560:               const updatedUsers = localUsers.map((u: any) => 
+src/components/ReceptionistDashboard.tsx:4600:         {parts.map((part, i) => 
+src/components/ReceptionistDashboard.tsx:4932:               {(['All', 'Active', 'Pending Review', 'Checked-In', 'No Show', 'Completed'] as const).map((st, idx) => (
+src/components/ReceptionistDashboard.tsx:5022:                         {filtered.map((b, idx) => {
+src/components/ReceptionistDashboard.tsx:5153:                 {dueSoonBookings.map((b, idx) => {
+src/components/ReceptionistDashboard.tsx:5420:                           Array.from({ length: 5 }).map((_, idx) => (
+src/components/ReceptionistDashboard.tsx:5443:                           .map((room, idx) => {
+src/components/ReceptionistDashboard.tsx:5498:                                     {room.amenities.slice(0, 3).map((a, idx) => (
+src/components/ReceptionistDashboard.tsx:5572:                     Array.from({ length: 6 }).map((_, idx) => (
+src/components/ReceptionistDashboard.tsx:5598:                     .map((room, idx) => {
+src/components/ReceptionistDashboard.tsx:5791:                                     {room.amenities.map((amenity, idx) => (
+src/components/ReceptionistDashboard.tsx:6015:                         .map((r, idx) => (
+src/components/ReceptionistDashboard.tsx:6363:                         const branchFiltered = bookings.map(b => ({
+src/components/ReceptionistDashboard.tsx:6432:                         return todaysBookings.map((b, idx) => {
+src/components/ReceptionistDashboard.tsx:6666:                       return filteredBookings.map((b, idx) => (
+src/components/ReceptionistDashboard.tsx:6919:                       .map((drink, index) => {
+src/components/ReceptionistDashboard.tsx:7322:                           {upcomingMonths.map((m, idx) => (
+src/components/ReceptionistDashboard.tsx:7349:                         ).map((num, idx) => (
+src/components/ReceptionistDashboard.tsx:7703:                             {checkoutUnpaidDrinks.map((sale, idx) => (
+src/components/ReceptionistDashboard.tsx:7856:                             {checkoutUnpaidDrinks.map((sale, idx) => (
+src/components/ReceptionistDashboard.tsx:8124:                     {rooms.map((rm, idx) => (
+src/components/ReceptionistDashboard.tsx:8333:                             {upcomingMonths.map((m, idx) => (
+src/components/ReceptionistDashboard.tsx:8360:                           ).map((num, idx) => (
+src/components/ReceptionistDashboard.tsx:9194:                                         {unpaidDrinksList.map((s, idx) => (
+src/components/ReceptionistDashboard.tsx:9632:                     {dynamicRooms.filter(r => getRoomEffectiveStatus(r) === 'Available').map((r, idx) => (
+src/components/ReceptionistDashboard.tsx:9953:                         {allBookings.map((b, idx) => (
+src/components/ReceptionistDashboard.tsx:10024:                   {rooms.filter(r => r.status === 'Maintenance').map((room, idx) => (
+src/components/ReceptionistDashboard.tsx:10491:                         activityCatalog.map((item, idx) => (
+src/components/ReceptionistDashboard.tsx:10840:                     {(['walkin', 'room', 'staff'] as const).map((type, idx) => (
+src/components/ReceptionistDashboard.tsx:10926:                           {branchBookings.filter(b => b.status === 'CheckedIn').map((b, idx) => (
+src/components/ReceptionistDashboard.tsx:10951:                             {dynamicRooms.filter(r => getRoomEffectiveStatus(r) === 'Occupied').map((r, idx) => {
+src/components/ReceptionistDashboard.tsx:11049:                                       .map((s, idx) => (
+src/components/ReceptionistDashboard.tsx:11135:                         {drinks.filter(d => d.inStock !== false).map((d, idx) => (
+src/components/ReceptionistDashboard.tsx:11168:                       {drinkCart.map((item, idx) => (
+src/components/ReceptionistDashboard.tsx:11472:                     {drinks.map((d, idx) => (
+src/components/ReceptionistDashboard.tsx:11525:                     {dynamicRooms.filter(r => getRoomEffectiveStatus(r) === 'Occupied').map((r, idx) => {
+src/components/ReceptionistDashboard.tsx:11754:                 Are you sure you want to permanently delete the sale for <strong className="text-zinc-300">{saleToDelete.items ? saleToDelete.items.map(i => i.drinkName).join(', ') : (saleToDelete.drinkName || 'Unknown Drink')}</strong>? This action will remove the revenue record and cannot be undone.
+src/components/ReceptionistDashboard.tsx:11828:                   todaysArrivals.map((b, idx) => {
+src/components/BestSellingDrinks.tsx:11:     .map(drink => {
+src/components/BestSellingDrinks.tsx:33:           {bestSellers.map((drink, index) => (
+src/components/DrinkSalesLedger.tsx:323:     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+src/components/DrinkSalesLedger.tsx:537:                     {uniqueStaffOptions.map((staff, idx) => (
+src/components/DrinkSalesLedger.tsx:643:               {(['today', 'yesterday', 'this_week', 'this_month', 'all_time', 'custom'] as const).map((preset, idx) => (
+src/components/DrinkSalesLedger.tsx:765:                 filteredSales.map((sale, idx) => {
+src/components/DrinkSalesLedger.tsx:856:                             {sale.items.map((item, idx) => (
+src/components/DrinkSalesLedger.tsx:1070:                       selectedSaleForDetails.items.map((item, idx) => {
+src/components/FutureStayCalendar.tsx:284:         {weekdays.map((wd, idx) => (
+src/components/QuickAvailabilityCalendar.tsx:182:       const roomStatusesForDay = rooms.map(room => {
+src/components/QuickAvailabilityCalendar.tsx:230:                 {roomStatusesForDay.map(({ room, isBooked, booking }, idx) => (
+src/components/QuickAvailabilityCalendar.tsx:289:               {rooms.map((r, idx) => (
+src/components/QuickAvailabilityCalendar.tsx:329:         {weekdays.map((wd, idx) => (
+src/components/RoomBookingCalendar.tsx:265:         {weekdays.map((wd, idx) => (
